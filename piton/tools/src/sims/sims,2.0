@@ -2639,12 +2639,12 @@ sub parse_args
   $ENV{PITON_PICO_HET} = $opt{pico_het};
   $ENV{PITON_ARIANE}   = $opt{ariane};
   $ENV{PITON_BLACKPARROT} = $opt{blackparrot};
-  $ENV{BSG_IP_CORES_DIR} = $ENV{DV_ROOT} . "/piton/design/chip/tile/blackparrot/basejump_stl";
-  $ENV{BP_COMMON_DIR} = $ENV{DV_ROOT} . "/piton/design/chip/tile/blackparrot/bp_common";
-  $ENV{BP_FE_DIR} = $ENV{DV_ROOT} . "/piton/design/chip/tile/blackparrot/bp_fe";
-  $ENV{BP_ME_DIR} = $ENV{DV_ROOT} . "/piton/design/chip/tile/blackparrot/bp_me";
-  $ENV{BP_BE_DIR} = $ENV{DV_ROOT} . "/piton/design/chip/tile/blackparrot/bp_be";
-  $ENV{BP_TOP_DIR} = $ENV{DV_ROOT} . "/piton/design/chip/tile/blackparrot/bp_top";
+  $ENV{BSG_IP_CORES_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/basejump_stl";
+  $ENV{BP_COMMON_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/bp_common";
+  $ENV{BP_FE_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/bp_fe";
+  $ENV{BP_ME_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/bp_me";
+  $ENV{BP_BE_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/bp_be";
+  $ENV{BP_TOP_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/bp_top";
   push (@{$opt{config_rtl}}, "PITON_PICO")     if ($opt{pico});
   push (@{$opt{config_rtl}}, "PITON_PICO_HET") if ($opt{pico_het});
   push (@{$opt{config_rtl}}, "PITON_ARIANE")   if ($opt{ariane});
