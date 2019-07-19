@@ -1,4 +1,5 @@
 
+`include "iop.h"
 module bp_l15_decoder
  import bp_common_pkg::*;
  import bp_common_aviary_pkg::*;
@@ -19,16 +20,16 @@ module bp_l15_decoder
    , output                                            mem_data_cmd_yumi_o
 
    // OpenPiton side
-   , output [4:0]                                      transducer_l15_rqtype
-   , output [2:0]                                      transducer_l15_size
-   , output [paddr_width_p-1:0]                        transducer_l15_address
-   , output [63:0]                                     transducer_l15_data
-   , output                                            transducer_l15_nc
-   , output                                            transducer_l15_val
+   , output logic [4:0]                                transducer_l15_rqtype
+   , output logic [2:0]                                transducer_l15_size
+   , output logic [paddr_width_p-1:0]                  transducer_l15_address
+   , output logic [63:0]                               transducer_l15_data
+   , output logic                                      transducer_l15_nc
+   , output logic                                      transducer_l15_val
    , input                                             l15_transducer_ack
    , input                                             l15_transducer_header_ack
 
-   , output [mem_payload_width_p-1:0]                  mem_payload
+   , output logic [mem_payload_width_p-1:0]            mem_payload
    , output bp_lce_cce_nc_req_size_e                   nc_size
 
    // Unused OpenPiton side connections
@@ -69,7 +70,7 @@ module bp_l15_decoder
           transducer_l15_data    = '0;
           transducer_l15_nc      = '0; // Always cache in OpenPiton for now
 
-          mem_payload = mem_cmd_cast_i.mem_payload;
+          mem_payload = mem_cmd_cast_i.payload;
           nc_size     = mem_cmd_cast_i.nc_size;
         end
       else
@@ -86,7 +87,7 @@ module bp_l15_decoder
           transducer_l15_data    = mem_data_cmd_cast_i.data;
           transducer_l15_nc      = '0; // Always cache in OpenPiton for now
 
-          mem_payload = mem_data_cmd_cast_i.mem_payload;
+          mem_payload = mem_data_cmd_cast_i.payload;
           nc_size     = mem_data_cmd_cast_i.nc_size;
         end
     end

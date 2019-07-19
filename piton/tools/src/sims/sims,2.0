@@ -1460,11 +1460,7 @@ sub generic_sim_build
     print "$prg: Building rtl model\n" ;
 
     if ($opt{vcs_build}) {
-      if ($ENV{VCS_BIN}) {
-        $build_cmd = "$ENV{VCS_BIN} ";
-      } else {
         $build_cmd  = "vcs " ;
-      }
       # lib_path needs to be before vcs_build_args
       $build_cmd .= $lib_path;
 

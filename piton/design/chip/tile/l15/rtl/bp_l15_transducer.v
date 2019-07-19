@@ -3,7 +3,7 @@
 module bp_l15_transducer
  import bp_common_pkg::*;
  import bp_common_aviary_pkg::*;
- #(parameter bp_cfg_e cfg_p = e_bp_inv_cfg
+ #(parameter bp_cfg_e cfg_p = e_bp_piton_cfg
    `declare_bp_proc_params(cfg_p)
    `declare_bp_me_if_widths(paddr_width_p, cce_block_width_p, num_lce_p, lce_assoc_p, mem_payload_width_p)
    )
@@ -47,33 +47,23 @@ module bp_l15_transducer
    , output                                            transducer_l15_csm_data
 
    // L1.5 -> BP
-   , input [mem_cce_resp_width_lp-1:0]                 mem_resp_i
-   , input                                             mem_resp_v_i
-   , output                                            mem_resp_ready_o
+   , output [mem_cce_resp_width_lp-1:0]                mem_resp_o
+   , output                                            mem_resp_v_o
+   , input                                             mem_resp_ready_i
 
-   , input [mem_cce_data_resp_width_lp-1:0]            mem_data_resp_i
-   , input                                             mem_data_resp_v_i
-   , output                                            mem_data_resp_ready_o
+   , output [mem_cce_data_resp_width_lp-1:0]           mem_data_resp_o
+   , output                                            mem_data_resp_v_o
+   , input                                             mem_data_resp_ready_i
    );
 
 logic [mem_payload_width_p-1:0] mem_payload;
 bp_lce_cce_nc_req_size_e nc_size;
 
 // BP -> L1.15
-bp_l15_decoder 
- #(.cfg_p(cfg_p)) 
- l15_decoder 
-  (.l15_req_addr_o(l15_req_addr_lo)
-   ,.*
-   );
+bp_l15_decoder #(.cfg_p(cfg_p)) l15_decoder (.*);
 
 // L1.5 -> BP
-bp_l15_encoder 
- #(.cfg_p(cfg_p)) 
- l15_encoder 
-  (.l15_req_addr_i(l15_req_addr_lo)
-   ,.*
-   );
+bp_l15_encoder #(.cfg_p(cfg_p)) l15_encoder (.*);
 
 endmodule 
   

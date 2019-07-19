@@ -835,40 +835,40 @@ if (TILE_TYPE == `BLACKPARROT_TILE) begin : g_blackparrot_core
     localparam [8:0] openpiton_cord = 3;
     localparam [8:0] dram_cord = 4;
 
-    logic [48:0] op_mem_cmd_lo;
+    logic [51:0] op_mem_cmd_lo;
     logic op_mem_cmd_v_lo, op_mem_cmd_yumi_li;
-    logic [664:0] op_mem_data_cmd_lo;
+    logic [667:0] op_mem_data_cmd_lo;
     logic op_mem_data_cmd_v_lo, op_mem_data_cmd_yumi_li;
-    logic [152:0] op_mem_resp_li;
+    logic [155:0] op_mem_resp_li;
     logic op_mem_resp_v_li, op_mem_resp_ready_lo;
-    logic [560:0] op_mem_data_resp_li;
+    logic [563:0] op_mem_data_resp_li;
     logic op_mem_data_resp_v_li, op_mem_data_resp_ready_lo;
     bp_openpiton_tile proc (
-         .clk_i                             (clk)
-         .reset_i                           (~reset_n_f)
+         .clk_i                             (clk_gated),
+         .reset_i                           (~rst_n_f),
 
-         .tile_cord_i                       ({tile1_cord, tile0_cord})
-         .dram_cord_i                       (dram_cord)
-         .clint_cord_i                      (clint_cord)
-         .openpiton_cord_i                  (openpiton_cord)
+         .tile_cord_i                       ({tile1_cord, tile0_cord}),
+         .dram_cord_i                       (dram_cord),
+         .clint_cord_i                      (clint_cord),
+         .openpiton_cord_i                  (openpiton_cord),
 
          // OpenPiton Bus
          // BP -> L1.5
-         .op_mem_cmd_o                      (op_mem_cmd_lo)
-         .op_mem_cmd_v_o                    (op_mem_cmd_v_lo)
-         .op_mem_cmd_yumi_i                 (op_mem_cmd_yumi_li)
+         .op_mem_cmd_o                      (op_mem_cmd_lo),
+         .op_mem_cmd_v_o                    (op_mem_cmd_v_lo),
+         .op_mem_cmd_yumi_i                 (op_mem_cmd_yumi_li),
 
-         .op_mem_data_cmd_o                 (op_mem_data_cmd_lo)
-         .op_mem_data_cmd_v_o               (op_mem_data_cmd_v_lo)
-         .op_mem_data_cmd_yumi_i            (op_mem_data_cmd_yumi_li)
+         .op_mem_data_cmd_o                 (op_mem_data_cmd_lo),
+         .op_mem_data_cmd_v_o               (op_mem_data_cmd_v_lo),
+         .op_mem_data_cmd_yumi_i            (op_mem_data_cmd_yumi_li),
 
          // L1.5 -> BP
-         .op_mem_resp_i                     (op_mem_resp_li)
-         .op_mem_resp_v_i                   (op_mem_resp_v_li)
-         .op_mem_resp_ready_o               (op_mem_resp_ready_lo)
+         .op_mem_resp_i                     (op_mem_resp_li),
+         .op_mem_resp_v_i                   (op_mem_resp_v_li),
+         .op_mem_resp_ready_o               (op_mem_resp_ready_lo),
 
-         .op_mem_data_resp_i                (op_mem_data_resp_li)
-         .op_mem_data_resp_v_i              (op_mem_data_resp_v_li)
+         .op_mem_data_resp_i                (op_mem_data_resp_li),
+         .op_mem_data_resp_v_i              (op_mem_data_resp_v_li),
          .op_mem_data_resp_ready_o          (op_mem_data_resp_ready_lo)
    );
 
@@ -879,27 +879,27 @@ if (TILE_TYPE == `BLACKPARROT_TILE) begin : g_blackparrot_core
     );
 
     bp_l15_transducer bp_l15_transducer(
-        .clk                                (clk),
-        .rst_n                              (rst_n),
+        .clk_i                              (clk),
+        .reset_i                            (~rst_n_f),
 
         // OpenPiton Bus
         // BP -> L1.5
-        .mem_cmd_i                          (op_mem_cmd_lo)
-        .mem_cmd_v_i                        (op_mem_cmd_v_lo)
-        .mem_cmd_yumi_o                     (op_mem_cmd_yumi_li)
+        .mem_cmd_i                          (op_mem_cmd_lo),
+        .mem_cmd_v_i                        (op_mem_cmd_v_lo),
+        .mem_cmd_yumi_o                     (op_mem_cmd_yumi_li),
 
-        .mem_data_cmd_i                     (op_mem_data_cmd_lo)
-        .mem_data_cmd_v_i                   (op_mem_data_cmd_v_lo)
-        .mem_data_cmd_yumi_o                (op_mem_data_cmd_yumi_li)
+        .mem_data_cmd_i                     (op_mem_data_cmd_lo),
+        .mem_data_cmd_v_i                   (op_mem_data_cmd_v_lo),
+        .mem_data_cmd_yumi_o                (op_mem_data_cmd_yumi_li),
 
         // L1.5 -> BP
-        .mem_resp_o                         (op_mem_resp_li)
-        .mem_resp_v_o                       (op_mem_resp_v_li)
-        .mem_resp_ready_i                   (op_mem_resp_ready_lo)
+        .mem_resp_o                         (op_mem_resp_li),
+        .mem_resp_v_o                       (op_mem_resp_v_li),
+        .mem_resp_ready_i                   (op_mem_resp_ready_lo),
 
-        .mem_data_resp_o                    (op_mem_data_resp_li)
-        .mem_data_resp_v_o                  (op_mem_data_resp_v_li)
-        .mem_data_resp_ready_i              (op_mem_data_resp_ready_lo)
+        .mem_data_resp_o                    (op_mem_data_resp_li),
+        .mem_data_resp_v_o                  (op_mem_data_resp_v_li),
+        .mem_data_resp_ready_i              (op_mem_data_resp_ready_lo),
 
         .l15_transducer_ack                 (l15_transducer_ack),
         .l15_transducer_header_ack          (l15_transducer_header_ack),
@@ -927,7 +927,7 @@ if (TILE_TYPE == `BLACKPARROT_TILE) begin : g_blackparrot_core
         .l15_transducer_data_0              (l15_transducer_data_0),
         .l15_transducer_data_1              (l15_transducer_data_1),
 
-        .transducer_l15_req_ack             (transducer_l15_req_ack),
+        .transducer_l15_req_ack             (transducer_l15_req_ack)
     );
 
 end

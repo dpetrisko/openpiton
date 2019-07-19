@@ -1,5 +1,5 @@
 
-
+`include "iop.h"
 module bp_l15_encoder
  import bp_common_pkg::*;
  import bp_common_aviary_pkg::*;
@@ -43,7 +43,7 @@ module bp_l15_encoder
   logic [paddr_width_p-1:0] mem_paddr_lo;
   bp_lce_cce_nc_req_size_e nc_size_lo;
 
-  wire load_not_store = (l15_transducer_returntype == `LD_RET);
+  wire load_not_store = (l15_transducer_returntype == `LOAD_RET);
   always_comb
     begin
       if (load_not_store)
