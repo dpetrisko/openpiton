@@ -878,7 +878,7 @@ if (TILE_TYPE == `BLACKPARROT_TILE) begin : g_blackparrot_core
         .spc_grst_l(spc_grst_l)
     );
 
-    pico_l15_transducer pico_l15_transducer(
+    bp_l15_transducer bp_l15_transducer(
         .clk                                (clk),
         .rst_n                              (rst_n),
 

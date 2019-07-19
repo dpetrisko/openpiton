@@ -172,6 +172,7 @@ Getopt::Long::Configure ('no_auto_abbrev') ;
         'pal_use_tgseed' => 0,
         'parallel' => 0,
         'ariane' => 0,
+        'blackparrot' => 0,
         'pico' => 0,
         'pico_het' => 0,
         'post_process_cmd' => [],
@@ -319,6 +320,7 @@ GetOptions (\%opt,
             'model_dir=s',
             'parallel!',
             'ariane!',
+            'blackparrot!',
             'pico!',
             'pico_het!',
             'regress!',
@@ -1342,7 +1344,7 @@ sub generic_sim_build
       push (@{$opt{vcs_build_args}}, "-l compile.log") ;
 
       # some SystemVerilog-specific options
-      if ($opt{ariane}) {
+      if ($opt{ariane} or $opt{blackparrot}) {
           push (@{$opt{vcs_build_args}}, "-sverilog +systemverilogext+.sv") ;
           push (@{$opt{vcs_build_args}}, "-ntb_opts uvm-1.1 +vpi ") ;
       }
@@ -2634,13 +2636,15 @@ sub parse_args
   $ENV{PITON_PICO}     = $opt{pico};
   $ENV{PITON_PICO_HET} = $opt{pico_het};
   $ENV{PITON_ARIANE}   = $opt{ariane};
+  $ENV{PITON_BLACKPARROT} = $opt{blackparrot};
   push (@{$opt{config_rtl}}, "PITON_PICO")     if ($opt{pico});
   push (@{$opt{config_rtl}}, "PITON_PICO_HET") if ($opt{pico_het});
   push (@{$opt{config_rtl}}, "PITON_ARIANE")   if ($opt{ariane});
   push (@{$opt{config_rtl}}, "WT_DCACHE")      if ($opt{ariane});
+  push (@{$opt{config_rtl}}, "PITON_BLACKPARROT") if ($opt{blackparrot});
 
 
-  if ($opt{pico} or $opt{pico_het} or $opt{ariane}) {
+  if ($opt{pico} or $opt{pico_het} or $opt{ariane} or $opt{blackparrot}) {
     push (@{$opt{config_rtl}}, "NO_MRA_VAL") ;
     push (@{$opt{config_rtl}}, "NO_SLAM_RANDOM") ;
   }
@@ -2674,6 +2678,8 @@ sub parse_args
         push (@{$opt{config_rtl}}, "RTL_PICO" . $i);
     } elsif ($opt{ariane}) {
         push (@{$opt{config_rtl}}, "RTL_ARIANE" . $i);
+    } elsif ($opt{blackparrot}) {
+        push (@{$opt{config_rtl}}, "RTL_BLACKPARROT" . $i);
     } else {
         push (@{$opt{config_rtl}}, "RTL_SPARC" . $i);
     }

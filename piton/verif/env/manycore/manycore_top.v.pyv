@@ -430,7 +430,11 @@ system system(
     monitor   monitor(
         .clk    (`CHIP_INT_CLK),
         .cmp_gclk  (`CHIP_INT_CLK),
+`ifndef PITON_BLACKPARROT
         .rst_l     (`CORE_REF0.reset_l)
+`else
+        .rst_l     (`CORE_REF0.reset_i)
+`endif
         );
 
 `ifndef MINIMAL_MONITORING
