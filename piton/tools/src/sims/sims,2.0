@@ -1085,7 +1085,7 @@ sub gen_flist
   # Add Ariane flist if -ariane is specified
   push (@{$opt{flist}}, "$ENV{DV_ROOT}/design/chip/tile/ariane/Flist.ariane") if ($opt{ariane}) ;
   # Add Blackparrot flist if -blackparrot is specified
-  push (@{$opt{flist}}, "$ENV{DV_ROOT}/design/chip/tile/blackparrot/bp_top/syn/flist.vcs") if ($opt{blackparrot}) ;
+  unshift (@{$opt{flist}}, "$ENV{DV_ROOT}/design/chip/tile/blackparrot/bp_top/syn/flist.vcs") if ($opt{blackparrot}) ;
 
 
   foreach my $flist (@{$opt{flist}}) {
