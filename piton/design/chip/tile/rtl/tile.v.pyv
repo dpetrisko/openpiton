@@ -852,12 +852,6 @@ if (TILE_TYPE == `BLACKPARROT_TILE) begin : g_blackparrot_core
          .clint_cord_i                      (clint_cord)
          .openpiton_cord_i                  (openpiton_cord)
 
-         .cmd_link_i                        ('0)
-         .cmd_link_o                        ()
-
-         .resp_link_i                       ('0)
-         .resp_link_o                       ()
-
          // OpenPiton Bus
          // BP -> L1.5
          .op_mem_cmd_o                      (op_mem_cmd_lo)
