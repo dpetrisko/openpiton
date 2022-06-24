@@ -1276,6 +1276,10 @@ sub pre_build
   # Generate the flist file
   &gen_flist ();
 
+  if ($opt{blackparrot}) {
+    system("sed -i 's#.*bp_common_pkg.sv#$ENV{DV_ROOT}/design/chip/tile/blackparrot/rtl/bp_common_piton_pkg.sv#g' flist");
+  }
+
   system("cp -f flist $cur_dir");
 
   if($opt{rv64_platform}) {
@@ -2226,7 +2230,7 @@ sub assemble_diag
     }
 
     if ($opt{blackparrot} and $opt{precompiled}) {
-      push @{$opt{asm_diag_root}}, "$ENV{DV_ROOT}/design/chip/tile/blackparrot/bp_common/test/mem/";
+      push @{$opt{asm_diag_root}}, "$ENV{BLACKPARROT_SDK}/prog/riscv-tests"
     }
 
     # find diagnostic
@@ -2676,6 +2680,7 @@ sub parse_args
             'gui!',
             'log_all!',
             'debug_all!',
+            'debug_pp!',
             'ibm!',
             'ed_enable!',
             'ed_sync_method=s',
@@ -2825,12 +2830,13 @@ sub parse_args
   $ENV{PITON_ARIANE}   = $opt{ariane};
   $ENV{PITON_BLACKPARROT} = $opt{blackparrot};
   $ENV{PITON_RV64_PLATFORM}     = $opt{rv64_platform};
-  $ENV{BASEJUMP_STL_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/external/basejump_stl";
-  $ENV{BP_COMMON_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/bp_common";
-  $ENV{BP_FE_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/bp_fe";
-  $ENV{BP_ME_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/bp_me";
-  $ENV{BP_BE_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/bp_be";
-  $ENV{BP_TOP_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/bp_top";
+  $ENV{BASEJUMP_STL_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/black-parrot/external/basejump_stl";
+  $ENV{BP_COMMON_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/black-parrot/bp_common";
+  $ENV{BP_FE_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/black-parrot/bp_fe";
+  $ENV{BP_ME_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/black-parrot/bp_me";
+  $ENV{BP_BE_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/black-parrot/bp_be";
+  $ENV{BP_TOP_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/black-parrot/bp_top";
+  $ENV{HARDFLOAT_DIR} = $ENV{DV_ROOT} . "/design/chip/tile/blackparrot/black-parrot/external/HardFloat";
   push (@{$opt{config_rtl}}, "PITON_OST1")     if ($opt{ost1});
   push (@{$opt{config_rtl}}, "PITON_PICO")     if ($opt{pico});
   push (@{$opt{config_rtl}}, "PITON_PICO")     if ($opt{pico_het});
@@ -2899,7 +2905,9 @@ sub parse_args
 
   #
   push (@{$opt{sim_run_args}}, "-gui") if ($opt{gui}) ;
+  push (@{$opt{vcs_build_args}}, "-assert svaext") ;
   push (@{$opt{vcs_build_args}}, "-debug_all") if ($opt{debug_all}) ;
+  push (@{$opt{vcs_build_args}}, "-debug_pp") if ($opt{debug_pp}) ;
 
   # Push optional execution drafting enable
   push (@{$opt{midas_args}}, "-DED_ENABLE") if ($opt{ed_enable});

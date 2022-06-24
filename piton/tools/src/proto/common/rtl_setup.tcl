@@ -503,26 +503,6 @@ set CHIP_RTL_IMPL_FILES [list \
     "${DV_ROOT}/design/chip/tile/ariane/src/register_interface/src/apb_to_reg.sv"             \
     "${DV_ROOT}/design/chip/tile/ariane/src/register_interface/src/reg_intf.sv"               \
     "${DV_ROOT}/design/chip/tile/ariane/src/register_interface/src/reg_intf_pkg.sv"           \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpu_div_sqrt_mvp/hdl/fpu_ff.sv"                 \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpu_div_sqrt_mvp/hdl/defs_div_sqrt_mvp.sv"      \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpu_div_sqrt_mvp/hdl/control_mvp.sv"            \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpu_div_sqrt_mvp/hdl/div_sqrt_mvp_wrapper.sv"   \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpu_div_sqrt_mvp/hdl/div_sqrt_top_mvp.sv"       \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpu_div_sqrt_mvp/hdl/iteration_div_sqrt_mvp.sv" \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpu_div_sqrt_mvp/hdl/norm_div_sqrt_mvp.sv"      \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpu_div_sqrt_mvp/hdl/nrbd_nrsc_mvp.sv"          \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpu_div_sqrt_mvp/hdl/preprocess_mvp.sv"         \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpnew_cast_multi.sv"                            \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpnew_classifier.sv"                            \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpnew_divsqrt_multi.sv"                         \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpnew_fma_multi.sv"                             \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpnew_fma.sv"                                   \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpnew_noncomp.sv"                               \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpnew_opgroup_block.sv"                         \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpnew_opgroup_fmt_slice.sv"                     \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpnew_opgroup_multifmt_slice.sv"                \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpnew_rounding.sv"                              \
-    "${DV_ROOT}/design/chip/tile/ariane/src/fpu/src/fpnew_top.sv"                                   \
 ]
 
 set CHIP_INCLUDE_FILES [list \
