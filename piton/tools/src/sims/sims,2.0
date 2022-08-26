@@ -2342,6 +2342,9 @@ sub assemble_diag
       } else {
         $ENV{RV64_MABI} = $opt{rv64_mabi} ;
       }
+      if ($opt{blackparrot}) {
+        push (@{$opt{gcc_args}}, "-DPITON_NOC_IPI")
+      }
       # only recompile if necessary
       if (!$opt{precompiled}) {
         print "$prg: assembling 64bit riscv diag (RV64IMAC)\n" ;
