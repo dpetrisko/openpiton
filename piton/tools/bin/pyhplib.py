@@ -60,11 +60,12 @@ if PITON_NUM_TILES == -1:
 
 PITON_OST1     = int(os.environ.get('PITON_OST1', '0'))
 PITON_ARIANE   = int(os.environ.get('PITON_ARIANE', '0'))
+PITON_BLACKPARROT = int(os.environ.get('PITON_BLACKPARROT', '0'))
 PITON_PICO     = int(os.environ.get('PITON_PICO', '0'))
 PITON_PICO_HET = int(os.environ.get('PITON_PICO_HET', '0'))
 PITON_RV64_PLATFORM   = int(os.environ.get('PITON_RV64_PLATFORM', '0'))
 
-if PITON_ARIANE or PITON_PICO:
+if PITON_BLACKPARROT or PITON_ARIANE or PITON_PICO:
     NUM_THREADS = PITON_NUM_TILES
 else:
     NUM_THREADS = 2 * PITON_NUM_TILES
@@ -135,6 +136,10 @@ fileName = "devices.xml"
 if os.getenv("PITON_ARIANE") is not None:
     if int(os.getenv("PITON_ARIANE")):
         fileName = "devices_ariane.xml"
+
+if os.getenv("PITON_BLACKPARROT") is not None:
+    if int(os.getenv("PITON_BLACKPARROT")):
+        fileName = "devices_blackparrot.xml"
 
 DEVICES_XML_FILENAME = os.path.join(os.getenv("PROTOSYN_RUNTIME_DESIGN_PATH", ""),
                                     os.getenv("PROTOSYN_RUNTIME_BOARD", ""),

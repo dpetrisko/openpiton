@@ -129,7 +129,7 @@ then
 NEWPATH=$NEWPATH:$CC_BIN
 fi
 
-export PATH="$NEWPATH:$PATH"
+export PATH="$PATH:$NEWPATH"
 
 # Set a path for MacOS
 OS=`uname -s`

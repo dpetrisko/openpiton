@@ -1,6 +1,6 @@
 bootrom_img = bootrom.img bootrom.sv
 
-GCC=riscv64-unknown-elf-gcc
+GCC=riscv64-unknown-elf-gcc -march=rv64imafd -mabi=lp64d
 OBJCOPY=riscv64-unknown-elf-objcopy
 DTB=rv64_platform.dtb
 PYTHON=python3

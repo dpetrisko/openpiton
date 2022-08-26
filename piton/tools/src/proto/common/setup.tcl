@@ -95,9 +95,16 @@ if {[info exists ::env(PITON_ARIANE)]} {
   append ALL_DEFAULT_VERILOG_MACROS " PITON_ARIANE PITON_RV64_PLATFORM PITON_RV64_DEBUGUNIT PITON_RV64_CLINT PITON_RV64_PLIC WT_DCACHE"
 }
 
+if {[info exists ::env(PITON_BLACKPARROT)]} {
+  append ALL_DEFAULT_VERILOG_MACROS " PITON_BLACKPARROT PITON_RV64_PLATFORM PITON_RV64_CLINT PITON_RV64_PLIC"
+}
+
 for {set k 0} {$k < $::env(PITON_NUM_TILES)} {incr k} {
   if {[info exists "::env(RTL_ARIANE$k)"]} {
     append ALL_DEFAULT_VERILOG_MACROS " RTL_ARIANE$k"
+  }
+  if {[info exists "::env(RTL_BLACKPARROT$k)"]} {
+    append ALL_DEFAULT_VERILOG_MACROS " RTL_BLACKPARROT$k"
   }
   if {[info exists "::env(RTL_PICO$k)"]} {
     append ALL_DEFAULT_VERILOG_MACROS " RTL_PICO$k"
@@ -112,22 +119,22 @@ for {set k 0} {$k < $::env(PITON_NUM_TILES)} {incr k} {
 
 puts "INFO: Using Defines: ${ALL_DEFAULT_VERILOG_MACROS}"
 
+# credit goes to https://github.com/PrincetonUniversity/openpiton/issues/50
+# and https://www.xilinx.com/support/answers/72570.html
+set tmp_PYTHONPATH $env(PYTHONPATH)
+set tmp_PYTHONHOME $env(PYTHONHOME)
+unset ::env(PYTHONPATH)
+unset ::env(PYTHONHOME)
+
 # Pre-process PyHP files
 source $DV_ROOT/tools/src/proto/common/pyhp_preprocess.tcl
 set ALL_RTL_IMPL_FILES [pyhp_preprocess ${ALL_RTL_IMPL_FILES}]
 set ALL_INCLUDE_FILES [pyhp_preprocess ${ALL_INCLUDE_FILES}]
 
 
-if  {[info exists ::env(PITON_ARIANE)]} {
+if  {[info exists ::env(PITON_RV64_PLATFORM)]} {
   puts "INFO: compiling DTS and bootroms for Ariane (MAX_HARTS=$::env(PITON_NUM_TILES), UART_FREQ=$env(CONFIG_SYS_FREQ))..."
   
-  
-  # credit goes to https://github.com/PrincetonUniversity/openpiton/issues/50 
-  # and https://www.xilinx.com/support/answers/72570.html
-  set tmp_PYTHONPATH $env(PYTHONPATH)                                                                               
-  set tmp_PYTHONHOME $env(PYTHONHOME)                                                                               
-  unset ::env(PYTHONPATH)                                                                                           
-  unset ::env(PYTHONHOME)
   
   set TMP [pwd]
   cd $::env(DV_ROOT)/design/chipset/rv64_platform/bootrom/baremetal

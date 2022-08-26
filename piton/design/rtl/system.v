@@ -526,7 +526,6 @@ wire  [`PITON_NUM_TILES-1:0]   ipi;         // software interrupt (a.k.a inter-p
 // PLIC
 wire  [`PITON_NUM_TILES*2-1:0] irq;         // level sensitive IR lines, mip & sip (async)
 `endif // ifdef PITON_RV64_PLIC
-`endif // ifdef PITON_RV64_PLATFORM
 
 //////////////////////
 // Sequential Logic //
@@ -549,7 +548,7 @@ end
 assign rtc = rtc_div[6];
 
 `endif // ifdef PITON_RV64_CLINT
-
+`endif // ifdef PITON_RV64_PLATFORM
 
 /////////////////////////
 // Combinational Logic //

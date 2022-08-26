@@ -174,6 +174,7 @@ Getopt::Long::Configure ('no_auto_abbrev') ;
         'parallel' => 0,
         'ost1' => 0,
         'ariane' => 0,
+        'blackparrot' => 0,
         'pico' => 0,
         'pico_het' => 0,
         'post_process_cmd' => [],
@@ -335,6 +336,7 @@ GetOptions (\%opt,
             'parallel!',
             'ost1!',
             'ariane!',
+            'blackparrot!',
             'pico!',
             'pico_het!',
             'sparcv9!',
@@ -354,17 +356,19 @@ GetOptions (\%opt,
            ) ;
 
 die ("DIE. -ariane and -pico/-pico_het cannot be set simultaneously") if ($opt{ariane} && ($opt{pico} || $opt{pico_het})) ;
+die ("DIE. -blackparrot and -pico/-pico_het cannot be set simultaneously") if ($opt{blackparrot} && ($opt{pico} || $opt{pico_het})) ;
 die ("DIE. -pico and -pico_het cannot both be set") if ($opt{pico} && $opt{pico_het}) ;
 
 # Setting ost1 by default. This works better than default to 1
 # for heterogeneous-ISA stuff
-if (!$opt{pico} && !$opt{ariane}) {
+if (!$opt{pico} && !$opt{ariane} && !$opt{blackparrot}) {
   $opt{ost1} = 1 ;
 }
 
 push (@{$opt{config_cpp_args}}, "-DFLIST_OST1")     if ($opt{ost1} || $opt{pico_het}) ;
 push (@{$opt{config_cpp_args}}, "-DFLIST_PICO")     if ($opt{pico} || $opt{pico_het}) ;
 push (@{$opt{config_cpp_args}}, "-DFLIST_ARIANE")   if ($opt{ariane}) ;
+push (@{$opt{config_cpp_args}}, "-DFLIST_BLACKPARROT")   if ($opt{blackparrot}) ;
 push (@{$opt{config_cpp_args}}, "-DFLIST_ORAM")     if ($opt{oram}) ;
 
 ################################################################################
@@ -1142,7 +1146,7 @@ sub gen_flist
       $line =~ s/^\s*(.*?)\s*$/$1/ ;
       $line .= "\n" ;
 
-      if (($line =~ /^\s*\/\//) or ($line =~ /^\s*$/)) {
+      if (($line =~ /^\s*\/\//) or ($line =~ /^\s*$/) or ($line =~ /^\s*#/)) {
         next ;
       }
 
@@ -1273,6 +1277,10 @@ sub pre_build
 
   # Generate the flist file
   &gen_flist ();
+
+if ($opt{blackparrot}) {
+    system("sed -i 's#.*bp_common_pkg.sv#$ENV{DV_ROOT}/design/chip/tile/blackparrot/rtl/bp_common_piton_pkg.sv#g' flist");
+  }
 
   system("cp -f flist $cur_dir");
 
@@ -1527,7 +1535,7 @@ sub generic_sim_build
     if ($opt{riv_build}) {
       $build_cmd = "vlib work; vlog " ;
     }
-	
+
     if ($opt{vlt_build}) {
       $build_cmd = "verilator -cc " ;
       $build_cmd .= "-exe $dv_root/tools/verilator/my_top.cpp " ;
@@ -1572,7 +1580,13 @@ sub generic_sim_build
     # Append flist to flist.new and rename to flist.
     open (FLIST, "flist") or die ("DIE. can't open flist");
     while (<FLIST>) {
-        print IFLIST "$_";
+      if ($opt{ariane} or $opt{blackparrot}) {
+        if (index($_,"ariane/openpiton/bootrom/baremetal/bootrom.sv") != -1) {
+        } elsif (index($_,"ariane/openpiton/bootrom/linux/bootrom_linux.sv") != -1) {
+        } else {
+          print IFLIST "$_";
+        }
+      }
     }
     close FLIST;
     close IFLIST;
@@ -2216,6 +2230,10 @@ sub assemble_diag
       push @{$opt{asm_diag_root}}, "$ENV{ARIANE_ROOT}/tmp/riscv-tests/build/benchmarks";
     }
 
+    if ($opt{blackparrot} and $opt{precompiled}) {
+      push @{$opt{asm_diag_root}}, "$ENV{BLACKPARROT_SDK}/prog/riscv-tests"
+    }
+
     # find diagnostic
     my $diag_full_path = &find_diag_path ($opt{asm_diag_name}, $opt{asm_diag_path}, $opt{asm_diag_root}) ;
 
@@ -2301,7 +2319,7 @@ sub assemble_diag
     if ($opt{rv64}) {
       # RISCV flow for RV64
       if (!$opt{rv64_target_triple}) {
-        if ($opt{ariane}) {
+        if ($opt{ariane} or $opt{blackparrot}) {
           $ENV{RV64_TARGET_TRIPLE} = "riscv64-unknown-elf" ;
         }
       } else {
@@ -2311,11 +2329,14 @@ sub assemble_diag
         if ($opt{ariane}) {
           $ENV{RV64_MARCH} = "rv64imafdc" ;
         }
+        if ($opt{blackparrot}) {
+          $ENV{RV64_MARCH} = "rv64imafd" ;
+        }
       } else {
         $ENV{RV64_MARCH} = $opt{rv64_march} ;
       }
       if (!$opt{rv64_mabi}) {
-        if ($opt{ariane}) {
+        if ($opt{ariane} or $opt{blackparrot}) {
           $ENV{RV64_MABI} = "lp64d" ;
         }
       } else {
@@ -2651,6 +2672,7 @@ sub parse_args
             'gui!',
             'log_all!',
             'debug_all!',
+            'debug_pp!',
             'ibm!',
             'ed_enable!',
             'ed_sync_method=s',
@@ -2816,6 +2838,8 @@ sub parse_args
         push (@{$opt{config_rtl}}, "RTL_PICO" . $i);
     } elsif ($opt{ariane}) {
         push (@{$opt{config_rtl}}, "RTL_ARIANE" . $i);
+    } elsif ($opt{blackparrot}) {
+        push (@{$opt{config_rtl}}, "RTL_BLACKPARROT" . $i);
     } elsif ($opt{ost1}) {
         push (@{$opt{config_rtl}}, "RTL_SPARC" . $i);
     }
@@ -2843,6 +2867,8 @@ sub parse_args
 
   #
   push (@{$opt{sim_run_args}}, "-gui") if ($opt{gui}) ;
+  push (@{$opt{vcs_build_args}}, "-assert svaext") if ($opt{blackparrot}) ;
+  push (@{$opt{vcs_build_args}}, "-debug_pp") if ($opt{debug_pp}) ;
   push (@{$opt{vcs_build_args}}, "-debug_all") if ($opt{debug_all}) ;
 
   # Push optional execution drafting enable
@@ -3105,6 +3131,11 @@ VERILOG COMPILATION RELATED
     -ariane
            this specifies that the ARIANE RV64GC core shall be used
            in this case, programs are compiled and assembled using the RISCV GCC toolchain.
+
+    -blackparrot
+           this specifies that the BLACKPARROT RV64G core shall be used instead of OpenSPARC.
+           in this case, programs are compiled and assembled using the RISCV GCC toolchain.
+
 
 VERILOG RUNTIME RELATED
 
