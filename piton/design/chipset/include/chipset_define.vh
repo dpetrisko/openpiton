@@ -107,7 +107,7 @@
 `ifdef PITON_ARIANE
 `define OLED_STRING "OpenPiton+ArianePrinceton & ETHZA Collaboration "
 `elsif PITON_BLACKPARROT
-`define OLED_STRING "OpenPiton+BlackParrotCollaboration"
+`define OLED_STRING "OpenPiton+      BlackParrot     Collaboration   "
 `else
 `define OLED_STRING "OpenPiton rel 10Princeton            Parallel              Group"
 `endif
