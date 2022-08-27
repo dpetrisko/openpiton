@@ -2675,7 +2675,6 @@ sub parse_args
             'gui!',
             'log_all!',
             'debug_all!',
-            'debug_pp!',
             'ibm!',
             'ed_enable!',
             'ed_sync_method=s',
@@ -2871,7 +2870,6 @@ sub parse_args
   #
   push (@{$opt{sim_run_args}}, "-gui") if ($opt{gui}) ;
   push (@{$opt{vcs_build_args}}, "-assert svaext") if ($opt{blackparrot}) ;
-  push (@{$opt{vcs_build_args}}, "-debug_pp") if ($opt{debug_pp}) ;
   push (@{$opt{vcs_build_args}}, "-debug_all") if ($opt{debug_all}) ;
 
   # Push optional execution drafting enable

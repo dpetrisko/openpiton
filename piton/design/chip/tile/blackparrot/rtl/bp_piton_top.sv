@@ -20,6 +20,7 @@ module bp_piton_top
    , input                                             reset_i
    , input [7:0]                                       config_coreid_x
    , input [7:0]                                       config_coreid_y
+   , input [7:0]                                       config_coreid_flat
 
    , input                                             timer_irq_i
    , input                                             software_irq_i
@@ -106,14 +107,14 @@ module bp_piton_top
   logic dcache_req_critical_data_li, icache_req_critical_data_li;
 
   bp_pce_l15_req_s [1:0] pce_l15_req_lo;
-  logic [1:0] pce_l15_req_v_lo, pce_l15_req_ready_li;
+  logic [1:0] pce_l15_req_v_lo, pce_l15_req_ready_and_li;
   bp_l15_pce_ret_s [1:0] l15_pce_ret_li;
-  logic [1:0] l15_pce_ret_v_li, l15_pce_ret_yumi_lo;
+  logic [1:0] l15_pce_ret_v_li, l15_pce_ret_ready_and_lo;
 
   bp_pce_l15_req_s [1:1] _pce_l15_req_lo;
-  logic [1:1] _pce_l15_req_v_lo, _pce_l15_req_ready_li;
+  logic [1:1] _pce_l15_req_v_lo, _pce_l15_req_ready_and_li;
   bp_l15_pce_ret_s [1:1] _l15_pce_ret_li;
-  logic [1:1] _l15_pce_ret_v_li, _l15_pce_ret_yumi_lo;
+  logic [1:1] _l15_pce_ret_v_li, _l15_pce_ret_ready_and_lo;
 
   logic freeze;
   // TODO: Make unfreeze IRQ
@@ -128,7 +129,7 @@ module bp_piton_top
   assign cfg_bus_lo =
     '{freeze      : freeze
       ,npc        : 32'h0010000
-      ,core_id    : '0
+      ,core_id    : config_coreid_flat 
       ,icache_id  : '0
       ,icache_mode: e_lce_mode_normal
       ,dcache_id  : 1'b1
@@ -218,7 +219,7 @@ module bp_piton_top
     ,.pce_id_p(0)
     )
    icache_pce
-   (.clk_i(clk_i)
+   (.clk_i(posedge_clk)
     ,.reset_i(reset_i)
 
     ,.cache_req_i(icache_req_lo)
@@ -247,11 +248,11 @@ module bp_piton_top
 
     ,.pce_l15_req_o(pce_l15_req_lo[0])
     ,.pce_l15_req_v_o(pce_l15_req_v_lo[0])
-    ,.pce_l15_req_ready_i(pce_l15_req_ready_li[0])
+    ,.pce_l15_req_ready_and_i(pce_l15_req_ready_and_li[0])
 
     ,.l15_pce_ret_i(l15_pce_ret_li[0])
     ,.l15_pce_ret_v_i(l15_pce_ret_v_li[0])
-    ,.l15_pce_ret_yumi_o(l15_pce_ret_yumi_lo[0])
+    ,.l15_pce_ret_ready_and_o(l15_pce_ret_ready_and_lo[0])
     );
 
   bp_pce
@@ -263,7 +264,7 @@ module bp_piton_top
     ,.pce_id_p(1)
     )
    dcache_pce
-   (.clk_i(clk_i)
+   (.clk_i(negedge_clk)
     ,.reset_i(reset_i)
 
     ,.cache_req_i(dcache_req_lo)
@@ -292,11 +293,11 @@ module bp_piton_top
 
     ,.pce_l15_req_o(_pce_l15_req_lo[1])
     ,.pce_l15_req_v_o(_pce_l15_req_v_lo[1])
-    ,.pce_l15_req_ready_i(_pce_l15_req_ready_li[1])
+    ,.pce_l15_req_ready_and_i(_pce_l15_req_ready_and_li[1])
 
     ,.l15_pce_ret_i(_l15_pce_ret_li[1])
     ,.l15_pce_ret_v_i(_l15_pce_ret_v_li[1])
-    ,.l15_pce_ret_yumi_o(_l15_pce_ret_yumi_lo[1])
+    ,.l15_pce_ret_ready_and_o(_l15_pce_ret_ready_and_lo[1])
     );
 
   // These latches are optimized out in Verilator 4.220...
@@ -307,16 +308,16 @@ module bp_piton_top
   bsg_deff_reset
    #(.width_p($bits(bp_pce_l15_req_s)+2))
    posedge_latch
-    (.clk_i(clk_i)
+    (.clk_i(posedge_clk)
      ,.reset_i(reset_i)
 `else
   bsg_dlatch
    #(.width_p($bits(bp_pce_l15_req_s)+2), .i_know_this_is_a_bad_idea_p(1))
    posedge_latch
-    (.clk_i(clk_i)
+    (.clk_i(posedge_clk)
 `endif
-     ,.data_i({_pce_l15_req_lo[1], _pce_l15_req_v_lo[1], pce_l15_req_ready_li[1]})
-     ,.data_o({pce_l15_req_lo[1], pce_l15_req_v_lo[1], _pce_l15_req_ready_li[1]})
+     ,.data_i({_pce_l15_req_lo[1], _pce_l15_req_v_lo[1], pce_l15_req_ready_and_li[1]})
+     ,.data_o({pce_l15_req_lo[1], pce_l15_req_v_lo[1], _pce_l15_req_ready_and_li[1]})
      );
 
   // Synchronize back to negedge clk
@@ -324,34 +325,33 @@ module bp_piton_top
   bsg_deff_reset
    #(.width_p($bits(bp_l15_pce_ret)+2))
    negedge_latch
-    (.clk_i(clk_i)
+    (.clk_i(negedge_clk)
      ,.reset_i(reset_i)
 `else
   bsg_dlatch
    #(.width_p($bits(bp_l15_pce_ret_s)+2), .i_know_this_is_a_bad_idea_p(1))
    negedge_latch
-    (.clk_i(clk_i)
+    (.clk_i(negedge_clk)
 `endif
-     ,.data_i({l15_pce_ret_li[1], l15_pce_ret_v_li[1], _l15_pce_ret_yumi_lo[1]})
-     ,.data_o({_l15_pce_ret_li[1], _l15_pce_ret_v_li[1], l15_pce_ret_yumi_lo[1]})
+     ,.data_i({l15_pce_ret_li[1], l15_pce_ret_v_li[1], _l15_pce_ret_ready_and_lo[1]})
+     ,.data_o({_l15_pce_ret_li[1], _l15_pce_ret_v_li[1], l15_pce_ret_ready_and_lo[1]})
      );
 
   // PCE -> L1.5 - Arbitration logic
+  // 4 elements to support writeback, could be reduced most likely
   bp_pce_l15_req_s [1:0] fifo_lo;
   logic [1:0] fifo_v_lo, fifo_yumi_li;
-  
-  // 4 to prevent writeback deadlock, could probably be reduced
   for (genvar i = 0; i < 2; i++)
     begin : fifo
       bsg_fifo_1r1w_small
        #(.width_p($bits(bp_pce_l15_req_s)), .els_p(4))
        mem_fifo
-        (.clk_i(clk_i)
+        (.clk_i(posedge_clk)
          ,.reset_i(reset_i)
 
          ,.data_i(pce_l15_req_lo[i])
          ,.v_i(pce_l15_req_v_lo[i])
-         ,.ready_o(pce_l15_req_ready_li[i])
+         ,.ready_o(pce_l15_req_ready_and_li[i])
 
          ,.data_o(fifo_lo[i])
          ,.v_o(fifo_v_lo[i])
@@ -399,74 +399,31 @@ module bp_piton_top
   assign transducer_l15_csm_data = '0;
 
   // L1.5 -> PCE
-  logic l15_fifo_v_li, l15_fifo_ready_lo;
-  logic fifo_pce_v_lo, fifo_pce_yumi_li;
-  bp_l15_pce_ret_s l15_fifo_li, fifo_pce_lo;
-
-  bsg_fifo_1r1w_small
-  #(.width_p($bits(bp_l15_pce_ret_s)), .els_p(16))
-  resp_fifo
-    (.clk_i(clk_i)
-    ,.reset_i(reset_i)
-
-    ,.data_i(l15_fifo_li)
-    ,.v_i(l15_fifo_v_li)
-    ,.ready_o(l15_fifo_ready_lo)
-
-    ,.data_o(fifo_pce_lo)
-    ,.v_o(fifo_pce_v_lo)
-    ,.yumi_i(fifo_pce_yumi_li)
-    );
-
-  assign l15_fifo_li.rtntype = bp_l15_pce_ret_type_e'(l15_transducer_returntype);
-  assign l15_fifo_li.noncacheable = l15_transducer_noncacheable;
-  assign l15_fifo_li.data_0 = l15_transducer_data_0;
-  assign l15_fifo_li.data_1 = l15_transducer_data_1;
-  assign l15_fifo_li.data_2 = l15_transducer_data_2;
-  assign l15_fifo_li.data_3 = l15_transducer_data_3;
-  assign l15_fifo_li.threadid = l15_transducer_threadid;
-  assign l15_fifo_li.atomic = l15_transducer_atomic;
-  assign l15_fifo_li.inval_address_15_4 = l15_transducer_inval_address_15_4;
-  assign l15_fifo_li.inval_icache_inval = l15_transducer_inval_icache_inval;
-  assign l15_fifo_li.inval_dcache_inval = l15_transducer_inval_dcache_inval;
-  assign l15_fifo_li.inval_icache_all_way = l15_transducer_inval_icache_all_way;
-  assign l15_fifo_li.inval_dcache_all_way = l15_transducer_inval_dcache_all_way;
-  assign l15_fifo_li.inval_way = l15_transducer_inval_way;
-  assign l15_fifo_v_li = l15_transducer_val;
-  assign transducer_l15_req_ack = l15_fifo_ready_lo & l15_transducer_val;
-
   for (genvar i = 0; i < 2; i++) 
     begin : l15_pce_ret
-      assign l15_pce_ret_li[i].rtntype = fifo_pce_lo.rtntype;
-      assign l15_pce_ret_li[i].noncacheable = fifo_pce_lo.noncacheable;
-      assign l15_pce_ret_li[i].data_0 = fifo_pce_lo.data_0;
-      assign l15_pce_ret_li[i].data_1 = fifo_pce_lo.data_1;
-      assign l15_pce_ret_li[i].data_2 = fifo_pce_lo.data_2;
-      assign l15_pce_ret_li[i].data_3 = fifo_pce_lo.data_3;
-      assign l15_pce_ret_li[i].threadid = fifo_pce_lo.threadid;
-      assign l15_pce_ret_li[i].atomic = fifo_pce_lo.atomic;
-      assign l15_pce_ret_li[i].inval_address_15_4 = fifo_pce_lo.inval_address_15_4;
-      assign l15_pce_ret_li[i].inval_icache_inval = fifo_pce_lo.inval_icache_inval;
-      assign l15_pce_ret_li[i].inval_dcache_inval = fifo_pce_lo.inval_dcache_inval;
-      assign l15_pce_ret_li[i].inval_icache_all_way = fifo_pce_lo.inval_icache_all_way;
-      assign l15_pce_ret_li[i].inval_dcache_all_way = fifo_pce_lo.inval_dcache_all_way;
-      assign l15_pce_ret_li[i].inval_way = fifo_pce_lo.inval_way;
+      assign l15_pce_ret_li[i].rtntype = bp_l15_pce_ret_type_e'(l15_transducer_returntype);
+      assign l15_pce_ret_li[i].noncacheable = l15_transducer_noncacheable;
+      assign l15_pce_ret_li[i].data_0 = l15_transducer_data_0;
+      assign l15_pce_ret_li[i].data_1 = l15_transducer_data_1;
+      assign l15_pce_ret_li[i].data_2 = l15_transducer_data_2;
+      assign l15_pce_ret_li[i].data_3 = l15_transducer_data_3;
+      assign l15_pce_ret_li[i].threadid = l15_transducer_threadid;
+      assign l15_pce_ret_li[i].atomic = l15_transducer_atomic;
+      assign l15_pce_ret_li[i].inval_address_15_4 = l15_transducer_inval_address_15_4;
+      assign l15_pce_ret_li[i].inval_icache_inval = l15_transducer_inval_icache_inval;
+      assign l15_pce_ret_li[i].inval_dcache_inval = l15_transducer_inval_dcache_inval;
+      assign l15_pce_ret_li[i].inval_icache_all_way = l15_transducer_inval_icache_all_way;
+      assign l15_pce_ret_li[i].inval_dcache_all_way = l15_transducer_inval_dcache_all_way;
+      assign l15_pce_ret_li[i].inval_way = l15_transducer_inval_way;
     end
+  assign transducer_l15_req_ack = (l15_pce_ret_ready_and_lo[0] & l15_pce_ret_v_li[0])
+                                  | (l15_pce_ret_ready_and_lo[1] & l15_pce_ret_v_li[1]);
 
-  assign fifo_pce_yumi_li = l15_pce_ret_yumi_lo[0] | l15_pce_ret_yumi_lo[1];
+  assign l15_pce_ret_v_li[0] = l15_transducer_val
+    && !(l15_transducer_returntype inside {e_load_ret, e_st_ack, e_atomic_ret});
 
-  always_comb begin
-    l15_pce_ret_v_li[0] = '0;
-    l15_pce_ret_v_li[1] = '0;
-
-    if (!((fifo_pce_lo.rtntype == e_load_ret) || (fifo_pce_lo.rtntype == e_st_ack) || (fifo_pce_lo.rtntype == e_atomic_ret))) begin
-      l15_pce_ret_v_li[0] = fifo_pce_v_lo;
-    end
-
-    if (fifo_pce_lo.rtntype != e_ifill_ret) begin
-      l15_pce_ret_v_li[1] = fifo_pce_v_lo;
-    end
-  end
+  assign l15_pce_ret_v_li[1] = l15_transducer_val
+    && !(l15_transducer_returntype inside {e_ifill_ret});
 
 endmodule
 
