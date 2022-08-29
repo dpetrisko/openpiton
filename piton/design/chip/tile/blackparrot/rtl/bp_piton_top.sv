@@ -44,7 +44,7 @@ module bp_piton_top
    , output logic [63:0]                               transducer_l15_data_next_entry
    , output logic [32:0]                               transducer_l15_csm_data
    , input                                             l15_transducer_ack
-   
+
    // L1.5 -> Transducer
    , input                                             l15_transducer_val
    , input [3:0]                                       l15_transducer_returntype
@@ -54,7 +54,7 @@ module bp_piton_top
    , input [63:0]                                      l15_transducer_data_3
    , input                                             l15_transducer_noncacheable
    , input                                             l15_transducer_atomic
-   , input                                             l15_transducer_threadid 
+   , input                                             l15_transducer_threadid
    , input [11:0]                                      l15_transducer_inval_address_15_4
    , input                                             l15_transducer_inval_icache_inval
    , input                                             l15_transducer_inval_dcache_inval
@@ -129,7 +129,7 @@ module bp_piton_top
   assign cfg_bus_lo =
     '{freeze      : freeze
       ,npc        : 32'h0010000
-      ,core_id    : config_coreid_flat 
+      ,core_id    : config_coreid_flat
       ,icache_id  : '0
       ,icache_mode: e_lce_mode_normal
       ,dcache_id  : 1'b1
@@ -212,10 +212,10 @@ module bp_piton_top
 
   bp_pce
    #(.bp_params_p(bp_params_p)
-    ,.assoc_p(icache_assoc_p)
     ,.sets_p(icache_sets_p)
-    ,.block_width_p(icache_block_width_p)
+    ,.assoc_p(icache_assoc_p)
     ,.fill_width_p(icache_fill_width_p)
+    ,.block_width_p(icache_block_width_p)
     ,.pce_id_p(0)
     )
    icache_pce
@@ -257,10 +257,10 @@ module bp_piton_top
 
   bp_pce
    #(.bp_params_p(bp_params_p)
-    ,.assoc_p(dcache_assoc_p)
     ,.sets_p(dcache_sets_p)
-    ,.block_width_p(dcache_block_width_p)
+    ,.assoc_p(dcache_assoc_p)
     ,.fill_width_p(dcache_fill_width_p)
+    ,.block_width_p(dcache_block_width_p)
     ,.pce_id_p(1)
     )
    dcache_pce
@@ -399,7 +399,7 @@ module bp_piton_top
   assign transducer_l15_csm_data = '0;
 
   // L1.5 -> PCE
-  for (genvar i = 0; i < 2; i++) 
+  for (genvar i = 0; i < 2; i++)
     begin : l15_pce_ret
       assign l15_pce_ret_li[i].rtntype = bp_l15_pce_ret_type_e'(l15_transducer_returntype);
       assign l15_pce_ret_li[i].noncacheable = l15_transducer_noncacheable;
@@ -416,14 +416,18 @@ module bp_piton_top
       assign l15_pce_ret_li[i].inval_dcache_all_way = l15_transducer_inval_dcache_all_way;
       assign l15_pce_ret_li[i].inval_way = l15_transducer_inval_way;
     end
-  assign transducer_l15_req_ack = (l15_pce_ret_ready_and_lo[0] & l15_pce_ret_v_li[0])
-                                  | (l15_pce_ret_ready_and_lo[1] & l15_pce_ret_v_li[1]);
+  // Need to enqueue invalidates onto both
+  wire pce0_req_ack = l15_pce_ret_ready_and_lo[0] & l15_pce_ret_ready_and_lo[1] & l15_pce_ret_v_li[0];
+  wire pce1_req_ack = l15_pce_ret_ready_and_lo[0] & l15_pce_ret_ready_and_lo[1] & l15_pce_ret_v_li[1];
+  assign transducer_l15_req_ack = pce0_req_ack | pce1_req_ack;
 
   assign l15_pce_ret_v_li[0] = l15_transducer_val
-    && !(l15_transducer_returntype inside {e_load_ret, e_st_ack, e_atomic_ret});
+    && (l15_transducer_inval_icache_inval
+        || l15_transducer_returntype inside {e_int_ret, e_ifill_ret});
 
   assign l15_pce_ret_v_li[1] = l15_transducer_val
-    && !(l15_transducer_returntype inside {e_ifill_ret});
+    && (l15_transducer_inval_dcache_inval
+        || l15_transducer_returntype inside {e_int_ret, e_load_ret, e_st_ack, e_atomic_ret});
 
 endmodule
 

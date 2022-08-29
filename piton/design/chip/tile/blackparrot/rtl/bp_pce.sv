@@ -7,11 +7,13 @@
 module bp_pce
   import bp_common_pkg::*;
   #(parameter bp_params_e bp_params_p = e_bp_unicore_parrotpiton_cfg
-   , parameter block_width_p = 128
-   , parameter fill_width_p = 128
-   , parameter assoc_p = 2
-   , parameter sets_p = 256
-   , parameter pce_id_p = 1 // 0 = I$, 1 = D$
+   , parameter `BSG_INV_PARAM(sets_p)
+   , parameter `BSG_INV_PARAM(assoc_p)
+   , parameter `BSG_INV_PARAM(fill_width_p)
+   , parameter `BSG_INV_PARAM(block_width_p)
+   , parameter `BSG_INV_PARAM(pce_id_p) // 0 = I$, 1 = D$
+
+   // Should not need to change from default
    , parameter metadata_latency_p = 1
    , parameter ret_fifo_els_p = pce_id_p == 0 ? 4 : 8
    `declare_bp_proc_params(bp_params_p)
@@ -78,15 +80,15 @@ module bp_pce
   `bp_cast_o(bp_pce_l15_req_s, pce_l15_req);
   `bp_cast_i(bp_l15_pce_ret_s, l15_pce_ret);
 
-  logic cache_req_v_r;
+  logic cache_req_done, cache_req_v_r;
   bsg_dff_reset_set_clear
    #(.width_p(1))
    cache_req_v_reg
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
-     ,.set_i(cache_req_yumi_o | pce_l15_req_v_o)
-     ,.clear_i(cache_req_complete_o)
+     ,.set_i(cache_req_yumi_o)
+     ,.clear_i(cache_req_done)
      ,.data_o(cache_req_v_r)
      );
 
@@ -131,16 +133,11 @@ module bp_pce
     ,.yumi_i(l15_pce_ret_yumi_lo)
     );
 
-  enum logic [3:0] {e_reset, e_clear, e_ready, e_uc_store_wait, e_send_req, e_uc_read_wait, e_amo_lr_wait, e_amo_sc_wait, e_amo_op_wait, e_read_wait} state_n, state_r;
-
-  wire uc_store_v_li      = cache_req_v_i & cache_req_cast_i.msg_type inside {e_uc_store} & cache_req_cast_i.subop inside {e_req_store};
-  wire wt_store_v_li      = cache_req_v_i & cache_req_cast_i.msg_type inside {e_wt_store};
-  wire no_return_amo_v_li = cache_req_v_i & cache_req_cast_i.msg_type inside {e_uc_store} & cache_req_cast_i.subop inside {e_req_amosc, e_req_amoswap, e_req_amoadd, e_req_amoxor, e_req_amoand
-                                                                                                                           , e_req_amoor, e_req_amomin, e_req_amomax, e_req_amominu, e_req_amomaxu};
+  enum logic [3:0] {e_reset, e_clear, e_ready, e_uc_store_wait, e_send_req, e_uc_read_wait, e_read_wait} state_n, state_r;
 
   logic other_resp_yumi_lo;
   wire store_resp_v_li = l15_pce_ret_v_li & (l15_pce_ret_li.rtntype == e_st_ack) & ~l15_pce_ret_li.noncacheable;
-  wire load_resp_v_li  = l15_pce_ret_v_li & l15_pce_ret_li.rtntype inside {e_load_ret, e_ifill_ret};
+  wire load_resp_v_li  = l15_pce_ret_v_li & l15_pce_ret_li.rtntype inside {e_load_ret, e_ifill_ret, e_atomic_ret};
   wire inval_v_li      = l15_pce_ret_v_li & l15_pce_ret_li.rtntype inside {e_evict_req, e_st_ack};
   wire is_ifill_ret_nc = l15_pce_ret_v_li & (l15_pce_ret_li.rtntype == e_ifill_ret) & l15_pce_ret_li.noncacheable;
   wire is_load_ret_nc  = l15_pce_ret_v_li & (l15_pce_ret_li.rtntype == e_load_ret) & l15_pce_ret_li.noncacheable;
@@ -150,14 +147,19 @@ module bp_pce
   // Fetch + Op atomics also set the noncacheable bit as 1
   wire is_amo_op_ret   = l15_pce_ret_v_li & (l15_pce_ret_li.rtntype == e_atomic_ret) & l15_pce_ret_li.atomic & l15_pce_ret_li.noncacheable;
 
-  wire miss_load_v_li  = cache_req_v_r & cache_req_r.msg_type inside {e_miss_load};
-  wire miss_store_v_li = cache_req_v_r & cache_req_r.msg_type inside {e_miss_store};
-  wire miss_v_li       = miss_load_v_li | miss_store_v_li;
-  wire uc_load_v_li    = cache_req_v_r & cache_req_r.msg_type inside {e_uc_load};
-  wire amo_lr_v_li     = cache_req_v_r & cache_req_r.msg_type inside {e_uc_amo} & cache_req_r.subop inside {e_req_amolr};
-  wire amo_sc_v_li     = cache_req_v_r & cache_req_r.msg_type inside {e_uc_amo} & cache_req_r.subop inside {e_req_amosc};
-  wire amo_op_v_li     = cache_req_v_r & cache_req_r.msg_type inside {e_uc_amo} & cache_req_r.subop inside {e_req_amoswap, e_req_amoadd, e_req_amoxor, e_req_amoand, e_req_amoor
-                                                                                                            ,e_req_amomin, e_req_amomax, e_req_amominu, e_req_amomaxu};
+  wire miss_load_v_r  = cache_req_v_r & cache_req_r.msg_type inside {e_miss_load};
+  wire miss_store_v_r = cache_req_v_r & cache_req_r.msg_type inside {e_miss_store};
+  wire miss_v_r       = miss_load_v_r | miss_store_v_r;
+  wire uc_load_v_r    = cache_req_v_r & cache_req_r.msg_type inside {e_uc_load};
+  wire uc_store_v_r   = cache_req_v_r & cache_req_r.msg_type inside {e_uc_store} & cache_req_r.subop inside {e_req_store};
+  wire wt_store_v_r   = cache_req_v_r & cache_req_r.msg_type inside {e_wt_store};
+  wire noret_amo_v_r  = cache_req_v_r & cache_req_r.msg_type inside {e_uc_store} & cache_req_r.subop inside {e_req_amosc, e_req_amoswap, e_req_amoadd, e_req_amoxor, e_req_amoand, e_req_amoor, e_req_amomin, e_req_amomax, e_req_amominu, e_req_amomaxu};
+  wire amo_lr_v_r     = cache_req_v_r & cache_req_r.msg_type inside {e_uc_amo} & cache_req_r.subop inside {e_req_amolr};
+  wire amo_sc_v_r     = cache_req_v_r & cache_req_r.msg_type inside {e_uc_amo} & cache_req_r.subop inside {e_req_amosc};
+  wire amo_op_v_r     = cache_req_v_r & cache_req_r.msg_type inside {e_uc_amo} & cache_req_r.subop inside {e_req_amoswap, e_req_amoadd, e_req_amoxor, e_req_amoand, e_req_amoor, e_req_amomin, e_req_amomax, e_req_amominu, e_req_amomaxu};
+
+  assign cache_req_complete_o = cache_req_done & ~wt_store_v_r;
+
   assign l15_pce_ret_yumi_lo = other_resp_yumi_lo | store_resp_v_li;
 
   logic [index_width_lp-1:0] index_cnt;
@@ -176,20 +178,76 @@ module bp_pce
 
      ,.count_o(index_cnt)
      );
-  
+
   wire index_done = (index_cnt == sets_p-1);
 
-  assign cache_req_credits_full_o  = (state_r != e_ready);
+  assign cache_req_credits_full_o  = (state_r != e_ready); // TODO: Proper fence
   assign cache_req_credits_empty_o = (state_r == e_ready);
-  assign cache_req_critical_tag_o  = '0;
-  assign cache_req_critical_data_o = '0;
   assign cache_req_busy_o          = cache_req_credits_full_o;
+
+  bp_pce_l15_amo_type_e amo_type;
+  always_comb
+    case (cache_req_r.subop)
+      e_req_amoswap: amo_type = e_amo_op_swap;
+      e_req_amoadd : amo_type = e_amo_op_add;
+      e_req_amoand : amo_type = e_amo_op_and;
+      e_req_amoor  : amo_type = e_amo_op_or;
+      e_req_amoxor : amo_type = e_amo_op_xor;
+      e_req_amomax : amo_type = e_amo_op_max;
+      e_req_amomin : amo_type = e_amo_op_min;
+      e_req_amomaxu: amo_type = e_amo_op_maxu;
+      e_req_amominu: amo_type = e_amo_op_minu;
+      e_req_amolr  : amo_type = e_amo_op_lr;
+      e_req_amosc  : amo_type = e_amo_op_sc;
+      default      : amo_type = e_amo_op_none;
+    endcase
+
+  bp_pce_l15_req_size_e req_size;
+  always_comb
+    case (cache_req_r.size)
+      e_size_1B : req_size = e_l15_size_1B;
+      e_size_2B : req_size = e_l15_size_2B;
+      e_size_4B : req_size = e_l15_size_4B;
+      e_size_8B : req_size = e_l15_size_8B;
+      e_size_16B: req_size = e_l15_size_16B;
+      // e_size_32B:
+      default: req_size = e_l15_size_32B;
+    endcase
+
+  // OpenPiton is big endian whereas BlackParrot is little endian
+  logic [dword_width_gp-1:0] req_data;
+  always_comb
+    case (cache_req_r.size)
+      e_size_1B: req_data = {8{cache_req_r.data[0+:8]}};
+      e_size_2B: req_data = {4{cache_req_r.data[0+:8], cache_req_r.data[8+:8]}};
+      e_size_4B: req_data = {2{cache_req_r.data[0+:8], cache_req_r.data[8+:8]
+                               ,cache_req_r.data[16+:8], cache_req_r.data[24+:8]
+                               }};
+      //e_size_8B:
+      default: req_data = {cache_req_r.data[0+:8], cache_req_r.data[8+:8]
+                           ,cache_req_r.data[16+:8], cache_req_r.data[24+:8]
+                           ,cache_req_r.data[32+:8], cache_req_r.data[40+:8]
+                           ,cache_req_r.data[48+:8], cache_req_r.data[56+:8]
+                           };
+    endcase
+
+  logic [fill_width_p-1:0] fill_data, fill_data_packed;
+  always_comb
+    case (cache_req_r.size)
+      e_size_1B : fill_data_packed = {fill_width_p/8{fill_data[0+:8]}};
+      e_size_2B : fill_data_packed = {fill_width_p/16{fill_data[0+:16]}};
+      e_size_4B : fill_data_packed = {fill_width_p/32{fill_data[0+:32]}};
+      e_size_8B : fill_data_packed = {fill_width_p/64{fill_data[0+:64]}};
+      e_size_16B: fill_data_packed = {fill_width_p/128{fill_data[0+:128]}};
+      //e_size_32B:
+      default: fill_data_packed = fill_data;
+    endcase
 
   // This is definitely over-provisioned, exponential?
   localparam backoff_cnt_lp = 255;
-  logic backoff, lr_enable;
   logic [`BSG_WIDTH(backoff_cnt_lp)-1:0] count_lo;
-
+  logic lr_enable;
+  wire backoff = is_amo_lrsc_ret & cache_data_mem_pkt_yumi_i & (cache_data_mem_pkt_cast_o.data != '0);
   bsg_counter_clear_up
    #(.max_val_p(backoff_cnt_lp)
      ,.init_val_p(0)
@@ -214,15 +272,22 @@ module bp_pce
       cache_tag_mem_pkt_cast_o  = '0;
       cache_tag_mem_pkt_v_o     = '0;
       cache_data_mem_pkt_cast_o = '0;
+      cache_data_mem_pkt_cast_o.data = fill_data_packed;
       cache_data_mem_pkt_v_o    = '0;
       cache_stat_mem_pkt_cast_o = '0;
       cache_stat_mem_pkt_v_o    = '0;
 
-      cache_req_complete_o = '0;
+      cache_req_critical_data_o = '0;
+      cache_req_critical_tag_o = '0;
+      cache_req_done = '0;
 
-      backoff = 1'b0;
-      
       pce_l15_req_cast_o = '0;
+      pce_l15_req_cast_o.data = req_data;
+      pce_l15_req_cast_o.size = req_size;
+      pce_l15_req_cast_o.amo_op = amo_type;
+      pce_l15_req_cast_o.l1rplway = (pce_id_p == 1)
+                                    ? {cache_req_r.addr[11], cache_req_metadata_r.hit_or_repl_way}
+                                    : cache_req_metadata_r.hit_or_repl_way;
       pce_l15_req_v_o = '0;
 
       other_resp_yumi_lo = '0;
@@ -234,8 +299,8 @@ module bp_pce
             other_resp_yumi_lo = (l15_pce_ret_v_li & (l15_pce_ret_li.rtntype == e_int_ret));
 
             state_n = other_resp_yumi_lo
-                          ? e_clear 
-                          : e_reset;
+                      ? e_clear
+                      : e_reset;
           end
         e_clear:
           begin
@@ -249,238 +314,64 @@ module bp_pce
 
             index_up = cache_tag_mem_pkt_yumi_i & cache_stat_mem_pkt_yumi_i;
 
-            cache_req_complete_o = (index_done & index_up);
+            cache_req_done = (index_done & index_up);
 
-            state_n = cache_req_complete_o 
-                          ? e_ready 
-                          : e_clear;
+            state_n = cache_req_done ? e_ready : e_clear;
           end
 
         e_ready:
           begin
-            cache_req_yumi_o = cache_req_v_i & pce_l15_req_ready_and_i;
-            if (uc_store_v_li | wt_store_v_li | no_return_amo_v_li) begin
-              pce_l15_req_cast_o.rqtype  = no_return_amo_v_li ? e_amo_req : e_store_req;
-              pce_l15_req_cast_o.nc      = uc_store_v_li | no_return_amo_v_li;
-              pce_l15_req_cast_o.address = cache_req_cast_i.addr;
-              pce_l15_req_cast_o.size    = (cache_req_cast_i.size == e_size_1B)
-                                           ? e_l15_size_1B
-                                           : (cache_req_cast_i.size == e_size_2B)
-                                             ? e_l15_size_2B
-                                             : (cache_req_cast_i.size == e_size_4B)
-                                               ? e_l15_size_4B
-                                               : e_l15_size_8B;
-              pce_l15_req_cast_o.amo_op  = bp_pce_l15_amo_type_e'((cache_req_cast_i.subop == e_req_amoswap)
-                                                                   ? e_amo_op_swap
-                                                                   : (cache_req_cast_i.subop == e_req_amoadd)
-                                                                   ? e_amo_op_add
-                                                                   : (cache_req_cast_i.subop == e_req_amoand)
-                                                                   ? e_amo_op_and
-                                                                   : (cache_req_cast_i.subop == e_req_amoor)
-                                                                   ? e_amo_op_or
-                                                                   : (cache_req_cast_i.subop == e_req_amoxor)
-                                                                   ? e_amo_op_xor
-                                                                   : (cache_req_cast_i.subop == e_req_amomax)
-                                                                   ? e_amo_op_max
-                                                                   : (cache_req_cast_i.subop == e_req_amomin)
-                                                                   ? e_amo_op_min
-                                                                   : (cache_req_cast_i.subop == e_req_amomaxu)
-                                                                   ? e_amo_op_maxu
-                                                                   : (cache_req_cast_i.subop == e_req_amominu)
-                                                                   ? e_amo_op_minu
-                                                                   : (cache_req_cast_i.subop == e_req_amosc)
-                                                                   ? e_amo_op_sc
-                                                                   : e_amo_op_none);
+            if (uc_store_v_r | wt_store_v_r | noret_amo_v_r)
+              begin
+                pce_l15_req_cast_o.rqtype  = noret_amo_v_r ? e_amo_req : e_store_req;
+                pce_l15_req_cast_o.nc      = uc_store_v_r | noret_amo_v_r;
+                pce_l15_req_cast_o.address = cache_req_r.addr;
+                pce_l15_req_v_o = 1'b1;
 
-              // OpenPiton is big endian whereas BlackParrot is little endian
-              pce_l15_req_cast_o.data    = (cache_req_cast_i.size == e_size_1B)
-                                            ? {8{cache_req_cast_i.data[0+:8]}}
-                                            : (cache_req_cast_i.size == e_size_2B)
-                                               ? {4{cache_req_cast_i.data[0+:8], cache_req_cast_i.data[8+:8]}}
-                                               : (cache_req_cast_i.size == e_size_4B)
-                                                  ? {2{cache_req_cast_i.data[0+:8], cache_req_cast_i.data[8+:8], 
-                                                       cache_req_cast_i.data[16+:8], cache_req_cast_i.data[24+:8]}}
-                                                  : {cache_req_cast_i.data[0+:8], cache_req_cast_i.data[8+:8], 
-                                                     cache_req_cast_i.data[16+:8], cache_req_cast_i.data[24+:8],
-                                                     cache_req_cast_i.data[32+:8], cache_req_cast_i.data[40+:8],
-                                                     cache_req_cast_i.data[48+:8], cache_req_cast_i.data[56+:8]};
-              pce_l15_req_v_o = cache_req_yumi_o;
-              state_n = (cache_req_yumi_o & ~wt_store_v_li) ? e_uc_store_wait : e_ready;
-            end
-            else begin
-              state_n = cache_req_yumi_o 
-                        ? e_send_req 
-                        : e_ready;
-            end 
+                cache_req_done = pce_l15_req_ready_and_i & pce_l15_req_v_o & wt_store_v_r;
+
+                state_n = (pce_l15_req_ready_and_i & pce_l15_req_v_o & ~wt_store_v_r) ? e_uc_store_wait : e_ready;
+              end
+            else if (uc_load_v_r)
+              begin
+                pce_l15_req_cast_o.rqtype = (pce_id_p == 1) ? e_load_req : e_imiss_req;
+                pce_l15_req_cast_o.nc = 1'b1;
+                pce_l15_req_cast_o.address = cache_req_r.addr;
+                pce_l15_req_v_o = 1'b1;
+
+                state_n = (pce_l15_req_ready_and_i & pce_l15_req_v_o) ? e_uc_read_wait : e_ready;
+              end
+            else if (miss_v_r)
+              begin
+                pce_l15_req_cast_o.rqtype = (pce_id_p == 1) ? e_load_req : e_imiss_req;
+                pce_l15_req_cast_o.nc = 1'b0;
+                pce_l15_req_cast_o.address = (pce_id_p == 1)
+                                             ? {cache_req_r.addr[paddr_width_p-1:4], 4'b0}
+                                             : {cache_req_r.addr[paddr_width_p-1:5], 5'b0};
+                pce_l15_req_v_o = 1'b1;
+
+                state_n = (pce_l15_req_ready_and_i & pce_l15_req_v_o) ? e_read_wait : e_send_req;
+              end
+            else if (amo_lr_v_r | amo_sc_v_r | amo_op_v_r)
+              begin
+                pce_l15_req_cast_o.rqtype = e_amo_req;
+                // Fetch + Op atomics need to have the nc bit set
+                pce_l15_req_cast_o.nc = 1'b1;
+                pce_l15_req_cast_o.address = cache_req_r.addr;
+                pce_l15_req_v_o = ~amo_lr_v_r | lr_enable;
+
+                state_n = (pce_l15_req_ready_and_i & pce_l15_req_v_o) ? e_uc_read_wait : e_send_req;
+              end
+
+              cache_req_yumi_o = cache_req_v_i & (~cache_req_v_r | cache_req_done);
           end
 
         e_uc_store_wait:
           begin
             other_resp_yumi_lo = l15_pce_ret_v_li & (l15_pce_ret_li.rtntype inside {e_st_ack, e_atomic_ret}) & l15_pce_ret_li.noncacheable;
+            cache_req_done = other_resp_yumi_lo;
 
-            state_n = other_resp_yumi_lo
-                      ? e_ready
-                      : e_uc_store_wait;
-          end
-        
-        e_send_req:
-          begin
-            if (miss_v_li) begin
-              pce_l15_req_cast_o.rqtype = (pce_id_p == 1)
-                                          ? e_load_req
-                                          : e_imiss_req;
-
-              pce_l15_req_cast_o.nc = 1'b0;
-              pce_l15_req_cast_o.size = (pce_id_p == 1)
-                                        ? e_l15_size_16B
-                                        : e_l15_size_32B;
-              pce_l15_req_cast_o.address = (pce_id_p == 1)
-                                           ? {cache_req_r.addr[paddr_width_p-1:4], 4'b0}
-                                           : {cache_req_r.addr[paddr_width_p-1:5], 5'b0};
-              pce_l15_req_cast_o.l1rplway = (pce_id_p == 1)
-                                            ? {cache_req_r.addr[11], cache_req_metadata_r.hit_or_repl_way}
-                                            : cache_req_metadata_r.hit_or_repl_way;
-              pce_l15_req_v_o = pce_l15_req_ready_and_i;
-
-              state_n = pce_l15_req_v_o
-                        ? e_read_wait
-                        : e_send_req;
-            end
-            else if (uc_load_v_li) begin
-              pce_l15_req_cast_o.rqtype = (pce_id_p == 1)
-                                            ? e_load_req
-                                            : e_imiss_req; 
-              pce_l15_req_cast_o.nc = 1'b1;
-              pce_l15_req_cast_o.size = (cache_req_r.size == e_size_1B)
-                                    ? e_l15_size_1B
-                                    : (cache_req_r.size == e_size_2B)
-                                      ? e_l15_size_2B
-                                      : (cache_req_r.size == e_size_4B)
-                                        ? e_l15_size_4B
-                                        : e_l15_size_8B;
-
-              pce_l15_req_cast_o.address = cache_req_r.addr;
-              pce_l15_req_cast_o.l1rplway = (pce_id_p == 1) 
-                                            ? {cache_req_r.addr[11], cache_req_metadata_r.hit_or_repl_way}
-                                            : cache_req_metadata_r.hit_or_repl_way;
-
-              pce_l15_req_v_o = pce_l15_req_ready_and_i;
-
-              state_n = pce_l15_req_v_o
-                        ? e_uc_read_wait
-                        : e_send_req;
-            end
-            else if (amo_lr_v_li & (pce_id_p == 1)) begin
-              if (lr_enable) begin
-                pce_l15_req_cast_o.rqtype = e_amo_req; 
-                pce_l15_req_cast_o.amo_op = e_amo_op_lr;
-                pce_l15_req_cast_o.nc = 1'b1;
-                pce_l15_req_cast_o.size = (cache_req_r.size == e_size_1B)
-                                      ? e_l15_size_1B
-                                      : (cache_req_r.size == e_size_2B)
-                                        ? e_l15_size_2B
-                                        : (cache_req_r.size == e_size_4B)
-                                          ? e_l15_size_4B
-                                          : e_l15_size_8B;
-
-                pce_l15_req_cast_o.address = cache_req_r.addr;
-                pce_l15_req_cast_o.l1rplway = (pce_id_p == 1) 
-                                              ? {cache_req_r.addr[11], cache_req_metadata_r.hit_or_repl_way}
-                                              : cache_req_metadata_r.hit_or_repl_way;
-
-                pce_l15_req_v_o = pce_l15_req_ready_and_i;
-              end
-
-              state_n = pce_l15_req_v_o
-                        ? e_amo_lr_wait
-                        : e_send_req;
-            end
-            else if (amo_sc_v_li & (pce_id_p == 1)) begin
-              pce_l15_req_cast_o.rqtype = e_amo_req; 
-              pce_l15_req_cast_o.amo_op = e_amo_op_sc;
-              pce_l15_req_cast_o.nc = 1'b1;
-              pce_l15_req_cast_o.size = (cache_req_r.size == e_size_1B)
-                                    ? e_l15_size_1B
-                                    : (cache_req_r.size == e_size_2B)
-                                      ? e_l15_size_2B
-                                      : (cache_req_r.size == e_size_4B)
-                                        ? e_l15_size_4B
-                                        : e_l15_size_8B;
-
-              pce_l15_req_cast_o.address = cache_req_r.addr;
-              pce_l15_req_cast_o.data = (cache_req_r.size == e_size_1B)
-                                    ? {8{cache_req_r.data[0+:8]}}
-                                    : (cache_req_r.size == e_size_2B)
-                                      ? {4{cache_req_r.data[0+:8], cache_req_r.data[8+:8]}}
-                                      : (cache_req_r.size == e_size_4B)
-                                        ? {2{cache_req_r.data[0+:8], cache_req_r.data[8+:8], 
-                                              cache_req_r.data[16+:8], cache_req_r.data[24+:8]}}
-                                        : {cache_req_r.data[0+:8], cache_req_r.data[8+:8], 
-                                            cache_req_r.data[16+:8], cache_req_r.data[24+:8],
-                                            cache_req_r.data[32+:8], cache_req_r.data[40+:8],
-                                            cache_req_r.data[48+:8], cache_req_r.data[56+:8]};
-
-              pce_l15_req_v_o = pce_l15_req_ready_and_i;
-
-              state_n = pce_l15_req_v_o
-                        ? e_amo_sc_wait
-                        : e_send_req;
-            end
-            else if (amo_op_v_li & (pce_id_p == 1)) begin
-              pce_l15_req_cast_o.rqtype = e_amo_req;
-              // TODO: Can this be done in a more concise manner?
-              pce_l15_req_cast_o.amo_op = bp_pce_l15_amo_type_e'((cache_req_r.subop == e_req_amoswap)
-                                                                  ? e_amo_op_swap
-                                                                  : (cache_req_r.subop == e_req_amoadd)
-                                                                  ? e_amo_op_add
-                                                                  : (cache_req_r.subop == e_req_amoand)
-                                                                  ? e_amo_op_and
-                                                                  : (cache_req_r.subop == e_req_amoor)
-                                                                  ? e_amo_op_or
-                                                                  : (cache_req_r.subop == e_req_amoxor)
-                                                                  ? e_amo_op_xor
-                                                                  : (cache_req_r.subop == e_req_amomax)
-                                                                  ? e_amo_op_max
-                                                                  : (cache_req_r.subop == e_req_amomin)
-                                                                  ? e_amo_op_min
-                                                                  : (cache_req_r.subop == e_req_amomaxu)
-                                                                  ? e_amo_op_maxu
-                                                                  : (cache_req_r.subop == e_req_amominu)
-                                                                  ? e_amo_op_minu
-                                                                  : e_amo_op_none);
-
-              // Fetch + Op atomics need to have the nc bit set
-              pce_l15_req_cast_o.nc = 1'b1;
-              pce_l15_req_cast_o.size = (cache_req_r.size == e_size_1B)
-                                    ? e_l15_size_1B
-                                    : (cache_req_r.size == e_size_2B)
-                                      ? e_l15_size_2B
-                                      : (cache_req_r.size == e_size_4B)
-                                        ? e_l15_size_4B
-                                        : e_l15_size_8B;
-
-              pce_l15_req_cast_o.address = cache_req_r.addr;
-              pce_l15_req_cast_o.data = (cache_req_r.size == e_size_1B)
-                                    ? {8{cache_req_r.data[0+:8]}}
-                                    : (cache_req_r.size == e_size_2B)
-                                      ? {4{cache_req_r.data[0+:8], cache_req_r.data[8+:8]}}
-                                      : (cache_req_r.size == e_size_4B)
-                                        ? {2{cache_req_r.data[0+:8], cache_req_r.data[8+:8], 
-                                              cache_req_r.data[16+:8], cache_req_r.data[24+:8]}}
-                                        : {cache_req_r.data[0+:8], cache_req_r.data[8+:8], 
-                                            cache_req_r.data[16+:8], cache_req_r.data[24+:8],
-                                            cache_req_r.data[32+:8], cache_req_r.data[40+:8],
-                                            cache_req_r.data[48+:8], cache_req_r.data[56+:8]};
-
-              pce_l15_req_cast_o.l1rplway = (pce_id_p == 1) 
-                                            ? {cache_req_r.addr[11], cache_req_metadata_r.hit_or_repl_way}
-                                            : cache_req_metadata_r.hit_or_repl_way;
-
-              pce_l15_req_v_o = pce_l15_req_ready_and_i;
-              state_n = pce_l15_req_v_o
-                        ? e_amo_op_wait
-                        : e_send_req;
-            end
+            state_n = cache_req_done ? e_ready : e_uc_store_wait;
           end
 
         e_uc_read_wait:
@@ -492,136 +383,57 @@ module bp_pce
             // based on how OP does this.
             if (is_ifill_ret_nc)
               begin
-                cache_data_mem_pkt_cast_o.data = ((cache_req_r.addr[3] == 1'b1) && (cache_req_r.addr[2] == 1'b0))
-                                                  ? {l15_pce_ret_li.data_1[0+:8],  l15_pce_ret_li.data_1[8+:8],    
-                                                     l15_pce_ret_li.data_1[16+:8], l15_pce_ret_li.data_1[24+:8],
-                                                     l15_pce_ret_li.data_1[32+:8], l15_pce_ret_li.data_1[40+:8],
-                                                     l15_pce_ret_li.data_1[48+:8], l15_pce_ret_li.data_1[56+:8]}
-                                                  : ((cache_req_r.addr[3] == 1'b1) && (cache_req_r.addr[2] == 1'b1))
-                                                     ? {l15_pce_ret_li.data_1[32+:8],  l15_pce_ret_li.data_1[40+:8],    
-                                                        l15_pce_ret_li.data_1[48+:8], l15_pce_ret_li.data_1[56+:8],
-                                                        l15_pce_ret_li.data_1[0+:8], l15_pce_ret_li.data_1[8+:8],
-                                                        l15_pce_ret_li.data_1[16+:8], l15_pce_ret_li.data_1[24+:8]}
-                                                     : ((cache_req_r.addr[3] == 1'b0) && (cache_req_r.addr[2] == 1'b1))
-                                                        ? {l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8],
-                                                           l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8],
-                                                           l15_pce_ret_li.data_0[0+:8], l15_pce_ret_li.data_0[8+:8],
-                                                           l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8]}
-                                                        : {l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8],    
-                                                           l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8],
-                                                           l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8],
-                                                           l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};
+                fill_data = ((cache_req_r.addr[3] == 1'b1) && (cache_req_r.addr[2] == 1'b0))
+                            ? {l15_pce_ret_li.data_1[0+:8],  l15_pce_ret_li.data_1[8+:8]
+                               ,l15_pce_ret_li.data_1[16+:8], l15_pce_ret_li.data_1[24+:8]
+                               ,l15_pce_ret_li.data_1[32+:8], l15_pce_ret_li.data_1[40+:8]
+                               ,l15_pce_ret_li.data_1[48+:8], l15_pce_ret_li.data_1[56+:8]}
+                            : ((cache_req_r.addr[3] == 1'b1) && (cache_req_r.addr[2] == 1'b1))
+                               ? {l15_pce_ret_li.data_1[32+:8],  l15_pce_ret_li.data_1[40+:8]
+                                  ,l15_pce_ret_li.data_1[48+:8], l15_pce_ret_li.data_1[56+:8]
+                                  ,l15_pce_ret_li.data_1[0+:8], l15_pce_ret_li.data_1[8+:8]
+                                  ,l15_pce_ret_li.data_1[16+:8], l15_pce_ret_li.data_1[24+:8]}
+                               : ((cache_req_r.addr[3] == 1'b0) && (cache_req_r.addr[2] == 1'b1))
+                                  ? {l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8]
+                                     ,l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]
+                                     ,l15_pce_ret_li.data_0[0+:8], l15_pce_ret_li.data_0[8+:8]
+                                     ,l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8]}
+                                  : {l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8]
+                                     ,l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8]
+                                     ,l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8]
+                                     ,l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};
               end
-            else if (is_load_ret_nc)
+            else if (is_load_ret_nc | is_amo_lrsc_ret | is_amo_op_ret)
               begin
-                cache_data_mem_pkt_cast_o.data = (cache_req_r.addr[3] == 1'b1)
-                                                 ? {l15_pce_ret_li.data_1[0+:8],  l15_pce_ret_li.data_1[8+:8],    
-                                                    l15_pce_ret_li.data_1[16+:8], l15_pce_ret_li.data_1[24+:8],
-                                                    l15_pce_ret_li.data_1[32+:8], l15_pce_ret_li.data_1[40+:8],
-                                                    l15_pce_ret_li.data_1[48+:8], l15_pce_ret_li.data_1[56+:8]} 
-                                                 : {l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8],    
-                                                    l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8],
-                                                    l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8],
-                                                    l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};
+                fill_data = (cache_req_r.addr[3] == 1'b1)
+                            ? {l15_pce_ret_li.data_1[0+:8],  l15_pce_ret_li.data_1[8+:8]
+                               ,l15_pce_ret_li.data_1[16+:8], l15_pce_ret_li.data_1[24+:8]
+                               ,l15_pce_ret_li.data_1[32+:8], l15_pce_ret_li.data_1[40+:8]
+                               ,l15_pce_ret_li.data_1[48+:8], l15_pce_ret_li.data_1[56+:8]}
+                            : {l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8]
+                               ,l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8]
+                               ,l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8]
+                               ,l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};
               end
-            cache_data_mem_pkt_v_o = is_ifill_ret_nc | is_load_ret_nc;
-            
+            else if (is_amo_lrsc_ret)
+              begin
+                // Size for an atomic operation is either 32 bits or 64 bits. SC
+                // returns either a 0 or 1
+                fill_data = {l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8]
+                             ,l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8]
+                             ,l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8]
+                             ,l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]
+                             };
+              end
+
+            cache_data_mem_pkt_v_o = is_ifill_ret_nc | is_load_ret_nc | is_amo_lrsc_ret | is_amo_op_ret | is_amo_lrsc_ret;
+            cache_req_critical_tag_o = cache_data_mem_pkt_v_o;
+            cache_req_critical_data_o = cache_data_mem_pkt_v_o;
+
             other_resp_yumi_lo = cache_data_mem_pkt_yumi_i;
-            cache_req_complete_o = cache_data_mem_pkt_yumi_i;
+            cache_req_done = other_resp_yumi_lo;
 
-            state_n = cache_req_complete_o 
-                          ? e_ready 
-                          : e_uc_read_wait;
-          end
-        
-        e_amo_lr_wait:
-          begin
-            // Checking for the return type here since we could be in this
-            // state when we receive an invalidation
-            if (is_amo_lrsc_ret) begin
-              cache_data_mem_pkt_cast_o.opcode = e_cache_data_mem_uncached;
-              // TODO: This might need some work based on how OP does this. 
-              cache_data_mem_pkt_cast_o.data = (cache_req_r.addr[3] == 1'b1)
-                                               ? {l15_pce_ret_li.data_1[0+:8],  l15_pce_ret_li.data_1[8+:8],    
-                                                  l15_pce_ret_li.data_1[16+:8], l15_pce_ret_li.data_1[24+:8],
-                                                  l15_pce_ret_li.data_1[32+:8], l15_pce_ret_li.data_1[40+:8],
-                                                  l15_pce_ret_li.data_1[48+:8], l15_pce_ret_li.data_1[56+:8]}   
-                                               : {l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8],    
-                                                  l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8],
-                                                  l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8],
-                                                  l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};   
-              cache_data_mem_pkt_v_o = l15_pce_ret_v_li;
-
-              other_resp_yumi_lo = cache_data_mem_pkt_yumi_i;
-              cache_req_complete_o = cache_data_mem_pkt_yumi_i;
-
-              state_n = cache_req_complete_o
-                            ? e_ready 
-                            : e_amo_lr_wait;
-            end
-            else begin
-              state_n = e_amo_lr_wait;
-            end
-          end
-        
-        e_amo_sc_wait:
-          begin
-            // Checking for the return type here since we could be in this
-            // state when we receive an invalidation
-            if (is_amo_lrsc_ret) begin
-              cache_data_mem_pkt_cast_o.opcode = e_cache_data_mem_uncached;
-              // Size for an atomic operation is either 32 bits or 64 bits. SC
-              // returns either a 0 or 1
-              cache_data_mem_pkt_cast_o.data = {l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8],    
-                                                  l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8],
-                                                  l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8],
-                                                  l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};
-              cache_data_mem_pkt_v_o = l15_pce_ret_v_li;
-
-              if (cache_data_mem_pkt_yumi_i & (cache_data_mem_pkt_cast_o.data != '0)) begin
-                backoff = 1'b1;
-              end
-
-              other_resp_yumi_lo = cache_data_mem_pkt_yumi_i;
-              cache_req_complete_o = cache_data_mem_pkt_yumi_i;
-
-              state_n = cache_req_complete_o
-                            ? e_ready 
-                            : e_amo_sc_wait;
-            end
-            else begin
-              state_n = e_amo_sc_wait;
-            end
-          end
-
-        e_amo_op_wait:
-          begin
-            // Checking for the return type here since we could be in this
-            // state when we receive an invalidation
-            if (is_amo_op_ret) begin
-              cache_data_mem_pkt_cast_o.opcode = e_cache_data_mem_uncached;
-              // TODO: This might need some work based on how OP does this. 
-              cache_data_mem_pkt_cast_o.data = (cache_req_r.addr[3] == 1'b1)
-                                               ? {l15_pce_ret_li.data_1[0+:8],  l15_pce_ret_li.data_1[8+:8],    
-                                                  l15_pce_ret_li.data_1[16+:8], l15_pce_ret_li.data_1[24+:8],
-                                                  l15_pce_ret_li.data_1[32+:8], l15_pce_ret_li.data_1[40+:8],
-                                                  l15_pce_ret_li.data_1[48+:8], l15_pce_ret_li.data_1[56+:8]}   
-                                               : {l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8],    
-                                                  l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8],
-                                                  l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8],
-                                                  l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};   
-              cache_data_mem_pkt_v_o = l15_pce_ret_v_li;
-
-              other_resp_yumi_lo = cache_data_mem_pkt_yumi_i;
-              cache_req_complete_o = cache_data_mem_pkt_yumi_i;
-
-              state_n = cache_req_complete_o
-                            ? e_ready 
-                            : e_amo_op_wait;
-            end
-            else begin
-              state_n = e_amo_op_wait;
-            end
+            state_n = cache_req_done ? e_ready : e_uc_read_wait;
           end
 
         e_read_wait:
@@ -631,33 +443,34 @@ module bp_pce
             cache_data_mem_pkt_cast_o.opcode = e_cache_data_mem_write;
             cache_data_mem_pkt_cast_o.index = cache_req_r.addr[block_offset_width_lp+:index_width_lp];
             cache_data_mem_pkt_cast_o.way_id = cache_req_metadata_r.hit_or_repl_way;
-            cache_data_mem_pkt_cast_o.data = is_ifill_ret
-                                             ? {l15_pce_ret_li.data_3[0+:8],  l15_pce_ret_li.data_3[8+:8],
-                                                l15_pce_ret_li.data_3[16+:8], l15_pce_ret_li.data_3[24+:8],
-                                                l15_pce_ret_li.data_3[32+:8], l15_pce_ret_li.data_3[40+:8],
-                                                l15_pce_ret_li.data_3[48+:8], l15_pce_ret_li.data_3[56+:8],
-                                                l15_pce_ret_li.data_2[0+:8],  l15_pce_ret_li.data_2[8+:8],       
-                                                l15_pce_ret_li.data_2[16+:8], l15_pce_ret_li.data_2[24+:8],
-                                                l15_pce_ret_li.data_2[32+:8], l15_pce_ret_li.data_2[40+:8],
-                                                l15_pce_ret_li.data_2[48+:8], l15_pce_ret_li.data_2[56+:8],
-                                                l15_pce_ret_li.data_1[0+:8],  l15_pce_ret_li.data_1[8+:8],    
-                                                l15_pce_ret_li.data_1[16+:8], l15_pce_ret_li.data_1[24+:8],
-                                                l15_pce_ret_li.data_1[32+:8], l15_pce_ret_li.data_1[40+:8],
-                                                l15_pce_ret_li.data_1[48+:8], l15_pce_ret_li.data_1[56+:8],       
-                                                l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8],    
-                                                l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8],
-                                                l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8],
-                                                l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]}
-                                             : {l15_pce_ret_li.data_1[0+:8],  l15_pce_ret_li.data_1[8+:8],    
-                                                l15_pce_ret_li.data_1[16+:8], l15_pce_ret_li.data_1[24+:8],
-                                                l15_pce_ret_li.data_1[32+:8], l15_pce_ret_li.data_1[40+:8],
-                                                l15_pce_ret_li.data_1[48+:8], l15_pce_ret_li.data_1[56+:8],       
-                                                l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8],    
-                                                l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8],
-                                                l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8],
-                                                l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};
+            fill_data = is_ifill_ret
+                        ? {l15_pce_ret_li.data_3[0+:8],  l15_pce_ret_li.data_3[8+:8]
+                           ,l15_pce_ret_li.data_3[16+:8], l15_pce_ret_li.data_3[24+:8]
+                           ,l15_pce_ret_li.data_3[32+:8], l15_pce_ret_li.data_3[40+:8]
+                           ,l15_pce_ret_li.data_3[48+:8], l15_pce_ret_li.data_3[56+:8]
+                           ,l15_pce_ret_li.data_2[0+:8],  l15_pce_ret_li.data_2[8+:8]
+                           ,l15_pce_ret_li.data_2[16+:8], l15_pce_ret_li.data_2[24+:8]
+                           ,l15_pce_ret_li.data_2[32+:8], l15_pce_ret_li.data_2[40+:8]
+                           ,l15_pce_ret_li.data_2[48+:8], l15_pce_ret_li.data_2[56+:8]
+                           ,l15_pce_ret_li.data_1[0+:8],  l15_pce_ret_li.data_1[8+:8]
+                           ,l15_pce_ret_li.data_1[16+:8], l15_pce_ret_li.data_1[24+:8]
+                           ,l15_pce_ret_li.data_1[32+:8], l15_pce_ret_li.data_1[40+:8]
+                           ,l15_pce_ret_li.data_1[48+:8], l15_pce_ret_li.data_1[56+:8]
+                           ,l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8]
+                           ,l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8]
+                           ,l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8]
+                           ,l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]}
+                        : {l15_pce_ret_li.data_1[0+:8],  l15_pce_ret_li.data_1[8+:8]
+                           ,l15_pce_ret_li.data_1[16+:8], l15_pce_ret_li.data_1[24+:8]
+                           ,l15_pce_ret_li.data_1[32+:8], l15_pce_ret_li.data_1[40+:8]
+                           ,l15_pce_ret_li.data_1[48+:8], l15_pce_ret_li.data_1[56+:8]
+                           ,l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8]
+                           ,l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8]
+                           ,l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8]
+                           ,l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};
             cache_data_mem_pkt_cast_o.fill_index = 1'b1;
             cache_data_mem_pkt_v_o = is_ifill_ret | is_load_ret;
+            cache_req_critical_data_o = cache_data_mem_pkt_v_o;
 
             cache_tag_mem_pkt_cast_o.opcode = e_cache_tag_mem_set_tag;
             cache_tag_mem_pkt_cast_o.index = cache_req_r.addr[block_offset_width_lp+:index_width_lp];
@@ -665,13 +478,12 @@ module bp_pce
             cache_tag_mem_pkt_cast_o.tag = cache_req_r.addr[block_offset_width_lp+index_width_lp+:ctag_width_p];
             cache_tag_mem_pkt_cast_o.state = is_ifill_ret ? e_COH_S : e_COH_M;
             cache_tag_mem_pkt_v_o = is_ifill_ret | is_load_ret;
+            cache_req_critical_tag_o = cache_tag_mem_pkt_v_o;
 
             other_resp_yumi_lo = cache_data_mem_pkt_yumi_i & cache_tag_mem_pkt_yumi_i;
-            cache_req_complete_o = cache_data_mem_pkt_yumi_i & cache_tag_mem_pkt_yumi_i;
+            cache_req_done = other_resp_yumi_lo;
 
-            state_n = cache_req_complete_o 
-                            ? e_ready 
-                            : e_read_wait;
+            state_n = cache_req_done ? e_ready : e_read_wait;
           end
         default: state_n = e_reset;
       endcase
@@ -682,12 +494,12 @@ module bp_pce
       // icache
       if (inval_v_li) begin
         if (((pce_id_p == 0) && l15_pce_ret_li.inval_icache_inval) || ((pce_id_p == 1) && l15_pce_ret_li.inval_dcache_inval)) begin
-          cache_tag_mem_pkt_cast_o.index = (pce_id_p == 1) 
-                                           ? {l15_pce_ret_li.inval_way[1], l15_pce_ret_li.inval_address_15_4[6:0]} 
+          cache_tag_mem_pkt_cast_o.index = (pce_id_p == 1)
+                                           ? {l15_pce_ret_li.inval_way[1], l15_pce_ret_li.inval_address_15_4[6:0]}
                                            : l15_pce_ret_li.inval_address_15_4[7:1];
           cache_tag_mem_pkt_cast_o.opcode = e_cache_tag_mem_set_state;
-          cache_tag_mem_pkt_cast_o.way_id = (pce_id_p == 1) 
-                                            ? l15_pce_ret_li.inval_way[0] 
+          cache_tag_mem_pkt_cast_o.way_id = (pce_id_p == 1)
+                                            ? l15_pce_ret_li.inval_way[0]
                                             : l15_pce_ret_li.inval_way;
           cache_tag_mem_pkt_cast_o.state  = e_COH_I;
           cache_tag_mem_pkt_v_o = l15_pce_ret_v_li;
@@ -695,21 +507,21 @@ module bp_pce
           other_resp_yumi_lo = cache_tag_mem_pkt_yumi_i;
         end
         else if (((pce_id_p == 0) && l15_pce_ret_li.inval_icache_all_way) || ((pce_id_p == 1) && l15_pce_ret_li.inval_dcache_all_way)) begin
-          cache_tag_mem_pkt_cast_o.index = (pce_id_p == 1) 
-                                           ? {l15_pce_ret_li.inval_way[1], l15_pce_ret_li.inval_address_15_4[6:0]} 
+          cache_tag_mem_pkt_cast_o.index = (pce_id_p == 1)
+                                           ? {l15_pce_ret_li.inval_way[1], l15_pce_ret_li.inval_address_15_4[6:0]}
                                            : l15_pce_ret_li.inval_address_15_4[7:1];
           cache_tag_mem_pkt_cast_o.opcode = e_cache_tag_mem_set_clear;
-          cache_tag_mem_pkt_cast_o.way_id = (pce_id_p == 1) 
-                                            ? l15_pce_ret_li.inval_way[0] 
+          cache_tag_mem_pkt_cast_o.way_id = (pce_id_p == 1)
+                                            ? l15_pce_ret_li.inval_way[0]
                                             : l15_pce_ret_li.inval_way;
           cache_tag_mem_pkt_v_o = l15_pce_ret_v_li;
           other_resp_yumi_lo = cache_tag_mem_pkt_yumi_i;
         end
       end
-      
+
     end
 
-  // synopsys sync_set_reset "reset_i"    
+  // synopsys sync_set_reset "reset_i"
   always_ff @(posedge clk_i)
     begin
       if(reset_i) begin
@@ -721,3 +533,4 @@ module bp_pce
     end
 
 endmodule
+
