@@ -180,9 +180,12 @@ module bp_pce
 
   wire index_done = (index_cnt == sets_p-1);
 
-  assign cache_req_credits_full_o  = (state_r != e_ready); // TODO: Proper fence
-  assign cache_req_credits_empty_o = (state_r == e_ready);
-  assign cache_req_busy_o          = cache_req_credits_full_o;
+  // We can't accept any more requests
+  assign cache_req_credits_full_o  =  cache_req_v_r;
+  // We have finished processing all of our requests
+  assign cache_req_credits_empty_o = ~cache_req_v_r;
+  // Force immediate acceptance of invalidations
+  assign cache_req_busy_o          = inval_v_li;
 
   bp_pce_l15_amo_type_e amo_type;
   always_comb
@@ -358,7 +361,7 @@ module bp_pce
                 state_n = (pce_l15_req_ready_and_i & pce_l15_req_v_o) ? e_uc_read_wait : e_send_req;
               end
 
-              cache_req_yumi_o = cache_req_v_i & (~cache_req_v_r | cache_req_complete_o);
+              cache_req_yumi_o = cache_req_v_i & ~cache_req_v_r;
           end
 
         e_uc_store_wait:
@@ -433,8 +436,6 @@ module bp_pce
 
         e_read_wait:
           begin
-            // Checking for return types here since we could also have
-            // invalidations coming in at anytime
             cache_data_mem_pkt_cast_o.opcode = e_cache_data_mem_write;
             cache_data_mem_pkt_cast_o.index = cache_req_r.addr[block_offset_width_lp+:index_width_lp];
             cache_data_mem_pkt_cast_o.way_id = cache_req_metadata_r.hit_or_repl_way;
@@ -464,6 +465,8 @@ module bp_pce
                            ,l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8]
                            ,l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};
             cache_data_mem_pkt_cast_o.fill_index = 1'b1;
+            // Checking for return types here since we could also have
+            // invalidations coming in at anytime
             cache_data_mem_pkt_v_o = is_ifill_ret | is_load_ret;
             cache_req_critical_data_o = cache_data_mem_pkt_v_o;
 
