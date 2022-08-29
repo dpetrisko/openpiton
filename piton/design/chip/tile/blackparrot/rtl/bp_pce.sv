@@ -80,7 +80,7 @@ module bp_pce
   `bp_cast_o(bp_pce_l15_req_s, pce_l15_req);
   `bp_cast_i(bp_l15_pce_ret_s, l15_pce_ret);
 
-  logic cache_req_done, cache_req_v_r;
+  logic cache_req_v_r;
   bsg_dff_reset_set_clear
    #(.width_p(1))
    cache_req_v_reg
@@ -88,7 +88,7 @@ module bp_pce
      ,.reset_i(reset_i)
 
      ,.set_i(cache_req_yumi_o)
-     ,.clear_i(cache_req_done)
+     ,.clear_i(cache_req_complete_o)
      ,.data_o(cache_req_v_r)
      );
 
@@ -135,8 +135,6 @@ module bp_pce
 
   enum logic [3:0] {e_reset, e_clear, e_ready, e_uc_store_wait, e_send_req, e_uc_read_wait, e_read_wait} state_n, state_r;
 
-  logic other_resp_yumi_lo;
-  wire store_resp_v_li = l15_pce_ret_v_li & (l15_pce_ret_li.rtntype == e_st_ack) & ~l15_pce_ret_li.noncacheable;
   wire load_resp_v_li  = l15_pce_ret_v_li & l15_pce_ret_li.rtntype inside {e_load_ret, e_ifill_ret, e_atomic_ret};
   wire inval_v_li      = l15_pce_ret_v_li & l15_pce_ret_li.rtntype inside {e_evict_req, e_st_ack};
   wire is_ifill_ret_nc = l15_pce_ret_v_li & (l15_pce_ret_li.rtntype == e_ifill_ret) & l15_pce_ret_li.noncacheable;
@@ -157,10 +155,6 @@ module bp_pce
   wire amo_lr_v_r     = cache_req_v_r & cache_req_r.msg_type inside {e_uc_amo} & cache_req_r.subop inside {e_req_amolr};
   wire amo_sc_v_r     = cache_req_v_r & cache_req_r.msg_type inside {e_uc_amo} & cache_req_r.subop inside {e_req_amosc};
   wire amo_op_v_r     = cache_req_v_r & cache_req_r.msg_type inside {e_uc_amo} & cache_req_r.subop inside {e_req_amoswap, e_req_amoadd, e_req_amoxor, e_req_amoand, e_req_amoor, e_req_amomin, e_req_amomax, e_req_amominu, e_req_amomaxu};
-
-  assign cache_req_complete_o = cache_req_done & ~wt_store_v_r;
-
-  assign l15_pce_ret_yumi_lo = other_resp_yumi_lo | store_resp_v_li;
 
   logic [index_width_lp-1:0] index_cnt;
   logic index_up;
@@ -279,7 +273,7 @@ module bp_pce
 
       cache_req_critical_data_o = '0;
       cache_req_critical_tag_o = '0;
-      cache_req_done = '0;
+      cache_req_complete_o = '0;
 
       pce_l15_req_cast_o = '0;
       pce_l15_req_cast_o.data = req_data;
@@ -290,17 +284,15 @@ module bp_pce
                                     : cache_req_metadata_r.hit_or_repl_way;
       pce_l15_req_v_o = '0;
 
-      other_resp_yumi_lo = '0;
+      l15_pce_ret_yumi_lo = '0;
       state_n = state_r;
 
       unique case (state_r)
         e_reset:
           begin
-            other_resp_yumi_lo = (l15_pce_ret_v_li & (l15_pce_ret_li.rtntype == e_int_ret));
+            l15_pce_ret_yumi_lo = (l15_pce_ret_v_li & (l15_pce_ret_li.rtntype == e_int_ret));
 
-            state_n = other_resp_yumi_lo
-                      ? e_clear
-                      : e_reset;
+            state_n = l15_pce_ret_yumi_lo ? e_clear : e_reset;
           end
         e_clear:
           begin
@@ -314,9 +306,9 @@ module bp_pce
 
             index_up = cache_tag_mem_pkt_yumi_i & cache_stat_mem_pkt_yumi_i;
 
-            cache_req_done = (index_done & index_up);
+            cache_req_complete_o = (index_done & index_up);
 
-            state_n = cache_req_done ? e_ready : e_clear;
+            state_n = cache_req_complete_o ? e_ready : e_clear;
           end
 
         e_ready:
@@ -328,7 +320,7 @@ module bp_pce
                 pce_l15_req_cast_o.address = cache_req_r.addr;
                 pce_l15_req_v_o = 1'b1;
 
-                state_n = (pce_l15_req_ready_and_i & pce_l15_req_v_o & ~wt_store_v_r) ? e_uc_store_wait : e_ready;
+                state_n = (pce_l15_req_ready_and_i & pce_l15_req_v_o) ? e_uc_store_wait : e_ready;
               end
             else if (uc_load_v_r)
               begin
@@ -361,17 +353,15 @@ module bp_pce
                 state_n = (pce_l15_req_ready_and_i & pce_l15_req_v_o) ? e_uc_read_wait : e_send_req;
               end
 
-              cache_req_done = pce_l15_req_ready_and_i & pce_l15_req_v_o & wt_store_v_r;
-
-              cache_req_yumi_o = cache_req_v_i & (~cache_req_v_r | cache_req_done);
+              cache_req_yumi_o = cache_req_v_i & (~cache_req_v_r | cache_req_complete_o);
           end
 
         e_uc_store_wait:
           begin
-            other_resp_yumi_lo = l15_pce_ret_v_li & (l15_pce_ret_li.rtntype inside {e_st_ack, e_atomic_ret}) & l15_pce_ret_li.noncacheable;
-            cache_req_done = other_resp_yumi_lo;
+            l15_pce_ret_yumi_lo = l15_pce_ret_v_li & (l15_pce_ret_li.rtntype inside {e_st_ack, e_atomic_ret});
+            cache_req_complete_o = l15_pce_ret_yumi_lo;
 
-            state_n = cache_req_done ? e_ready : e_uc_store_wait;
+            state_n = cache_req_complete_o ? e_ready : e_uc_store_wait;
           end
 
         e_uc_read_wait:
@@ -430,10 +420,10 @@ module bp_pce
             cache_req_critical_tag_o = cache_data_mem_pkt_v_o;
             cache_req_critical_data_o = cache_data_mem_pkt_v_o;
 
-            other_resp_yumi_lo = cache_data_mem_pkt_yumi_i;
-            cache_req_done = other_resp_yumi_lo;
+            l15_pce_ret_yumi_lo = cache_data_mem_pkt_yumi_i;
+            cache_req_complete_o = l15_pce_ret_yumi_lo;
 
-            state_n = cache_req_done ? e_ready : e_uc_read_wait;
+            state_n = cache_req_complete_o ? e_ready : e_uc_read_wait;
           end
 
         e_read_wait:
@@ -480,10 +470,10 @@ module bp_pce
             cache_tag_mem_pkt_v_o = is_ifill_ret | is_load_ret;
             cache_req_critical_tag_o = cache_tag_mem_pkt_v_o;
 
-            other_resp_yumi_lo = cache_data_mem_pkt_yumi_i & cache_tag_mem_pkt_yumi_i;
-            cache_req_done = other_resp_yumi_lo;
+            l15_pce_ret_yumi_lo = cache_data_mem_pkt_yumi_i & cache_tag_mem_pkt_yumi_i;
+            cache_req_complete_o = l15_pce_ret_yumi_lo;
 
-            state_n = cache_req_done ? e_ready : e_read_wait;
+            state_n = cache_req_complete_o ? e_ready : e_read_wait;
           end
         default: state_n = e_reset;
       endcase
@@ -504,7 +494,7 @@ module bp_pce
           cache_tag_mem_pkt_cast_o.state  = e_COH_I;
           cache_tag_mem_pkt_v_o = l15_pce_ret_v_li;
 
-          other_resp_yumi_lo = cache_tag_mem_pkt_yumi_i;
+          l15_pce_ret_yumi_lo = cache_tag_mem_pkt_yumi_i;
         end
         else if (((pce_id_p == 0) && l15_pce_ret_li.inval_icache_all_way) || ((pce_id_p == 1) && l15_pce_ret_li.inval_dcache_all_way)) begin
           cache_tag_mem_pkt_cast_o.index = (pce_id_p == 1)
@@ -515,7 +505,7 @@ module bp_pce
                                             ? l15_pce_ret_li.inval_way[0]
                                             : l15_pce_ret_li.inval_way;
           cache_tag_mem_pkt_v_o = l15_pce_ret_v_li;
-          other_resp_yumi_lo = cache_tag_mem_pkt_yumi_i;
+          l15_pce_ret_yumi_lo = cache_tag_mem_pkt_yumi_i;
         end
       end
 
