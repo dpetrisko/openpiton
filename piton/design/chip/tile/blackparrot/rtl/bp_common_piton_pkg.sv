@@ -36,6 +36,10 @@ package bp_common_pkg;
       ,dcache_block_width   : 128
       ,dcache_fill_width    : 128
       ,l2_en                : 0
+      ,l2_amo_support       : (1 << e_lr_sc)
+                              | (1 << e_amo_swap)
+                              | (1 << e_amo_fetch_logic)
+                              | (1 << e_amo_fetch_arithmetic)
       ,default : "inv"
       };
   `bp_aviary_derive_cfg(bp_unicore_parrotpiton_cfg_p

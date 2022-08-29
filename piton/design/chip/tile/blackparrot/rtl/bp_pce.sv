@@ -247,7 +247,7 @@ module bp_pce
   localparam backoff_cnt_lp = 255;
   logic [`BSG_WIDTH(backoff_cnt_lp)-1:0] count_lo;
   logic lr_enable;
-  wire backoff = is_amo_lrsc_ret & cache_data_mem_pkt_yumi_i & (cache_data_mem_pkt_cast_o.data != '0);
+  wire backoff = amo_sc_v_r & cache_data_mem_pkt_yumi_i & (cache_data_mem_pkt_cast_o.data != '0);
   bsg_counter_clear_up
    #(.max_val_p(backoff_cnt_lp)
      ,.init_val_p(0)
@@ -328,8 +328,6 @@ module bp_pce
                 pce_l15_req_cast_o.address = cache_req_r.addr;
                 pce_l15_req_v_o = 1'b1;
 
-                cache_req_done = pce_l15_req_ready_and_i & pce_l15_req_v_o & wt_store_v_r;
-
                 state_n = (pce_l15_req_ready_and_i & pce_l15_req_v_o & ~wt_store_v_r) ? e_uc_store_wait : e_ready;
               end
             else if (uc_load_v_r)
@@ -352,16 +350,18 @@ module bp_pce
 
                 state_n = (pce_l15_req_ready_and_i & pce_l15_req_v_o) ? e_read_wait : e_send_req;
               end
-            else if (amo_lr_v_r | amo_sc_v_r | amo_op_v_r)
+            else if ((amo_lr_v_r & lr_enable) | amo_sc_v_r | amo_op_v_r)
               begin
                 pce_l15_req_cast_o.rqtype = e_amo_req;
                 // Fetch + Op atomics need to have the nc bit set
                 pce_l15_req_cast_o.nc = 1'b1;
                 pce_l15_req_cast_o.address = cache_req_r.addr;
-                pce_l15_req_v_o = ~amo_lr_v_r | lr_enable;
+                pce_l15_req_v_o = 1'b1;
 
                 state_n = (pce_l15_req_ready_and_i & pce_l15_req_v_o) ? e_uc_read_wait : e_send_req;
               end
+
+              cache_req_done = pce_l15_req_ready_and_i & pce_l15_req_v_o & wt_store_v_r;
 
               cache_req_yumi_o = cache_req_v_i & (~cache_req_v_r | cache_req_done);
           end
