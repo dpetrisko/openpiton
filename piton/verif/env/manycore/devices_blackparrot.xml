@@ -33,7 +33,7 @@ Description: Peripheral address map for OpenPiton+BlackParrot configurations.
     </port>
     <port>
         <name>uart</name>
-        <base>0x0000101000</base>
+        <base>0xfff0c2c000</base>
         <!-- Randomly chosen length (longer than needed) -->
         <length>0x4000</length>
         <noc2in/>
