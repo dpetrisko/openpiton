@@ -423,11 +423,15 @@ module bp_piton_top
 
   assign l15_pce_ret_v_li[0] = l15_transducer_val
     && (l15_transducer_inval_icache_inval
-        || l15_transducer_returntype inside {e_int_ret, e_ifill_ret});
+        || l15_transducer_inval_icache_all_way
+        || l15_transducer_returntype inside {e_int_ret, e_ifill_ret}
+        );
 
   assign l15_pce_ret_v_li[1] = l15_transducer_val
     && (l15_transducer_inval_dcache_inval
-        || l15_transducer_returntype inside {e_int_ret, e_load_ret, e_st_ack, e_atomic_ret});
+        || l15_transducer_inval_dcache_all_way
+        || l15_transducer_returntype inside {e_int_ret, e_load_ret, e_st_ack, e_atomic_ret}
+        );
 
 endmodule
 

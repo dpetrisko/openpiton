@@ -136,7 +136,12 @@ module bp_pce
   enum logic [3:0] {e_reset, e_clear, e_ready, e_uc_store_wait, e_send_req, e_uc_read_wait, e_read_wait} state_n, state_r;
 
   wire load_resp_v_li  = l15_pce_ret_v_li & l15_pce_ret_li.rtntype inside {e_load_ret, e_ifill_ret, e_atomic_ret};
-  wire inval_v_li      = l15_pce_ret_v_li & l15_pce_ret_li.rtntype inside {e_evict_req, e_st_ack};
+  wire icache_inval_li = l15_pce_ret_v_li & (pce_id_p == 0) & l15_pce_ret_li.inval_icache_inval;
+  wire dcache_inval_li = l15_pce_ret_v_li & (pce_id_p == 1) & l15_pce_ret_li.inval_dcache_inval;
+  wire icache_clear_li = l15_pce_ret_v_li & (pce_id_p == 0) & l15_pce_ret_li.inval_icache_all_way;
+  wire dcache_clear_li = l15_pce_ret_v_li & (pce_id_p == 1) & l15_pce_ret_li.inval_dcache_all_way;
+  wire inval_v_li      = icache_inval_li | dcache_inval_li;
+  wire clear_v_li      = icache_clear_li | dcache_clear_li;
   wire is_ifill_ret_nc = l15_pce_ret_v_li & (l15_pce_ret_li.rtntype == e_ifill_ret) & l15_pce_ret_li.noncacheable;
   wire is_load_ret_nc  = l15_pce_ret_v_li & (l15_pce_ret_li.rtntype == e_load_ret) & l15_pce_ret_li.noncacheable;
   wire is_ifill_ret    = l15_pce_ret_v_li & (l15_pce_ret_li.rtntype == e_ifill_ret) & ~l15_pce_ret_li.noncacheable;
@@ -393,7 +398,17 @@ module bp_pce
                                      ,l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8]
                                      ,l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};
               end
-            else if (is_load_ret_nc | is_amo_lrsc_ret | is_amo_op_ret)
+            else if (is_amo_lrsc_ret)
+              begin
+                // Size for an atomic operation is either 32 bits or 64 bits. SC
+                // returns either a 0 or 1
+                fill_data = {l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8]
+                             ,l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8]
+                             ,l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8]
+                             ,l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]
+                             };
+              end
+            else if (is_load_ret_nc | is_amo_op_ret)
               begin
                 fill_data = (cache_req_r.addr[3] == 1'b1)
                             ? {l15_pce_ret_li.data_1[0+:8],  l15_pce_ret_li.data_1[8+:8]
@@ -405,18 +420,8 @@ module bp_pce
                                ,l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8]
                                ,l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};
               end
-            else if (is_amo_lrsc_ret)
-              begin
-                // Size for an atomic operation is either 32 bits or 64 bits. SC
-                // returns either a 0 or 1
-                fill_data = {l15_pce_ret_li.data_0[0+:8],  l15_pce_ret_li.data_0[8+:8]
-                             ,l15_pce_ret_li.data_0[16+:8], l15_pce_ret_li.data_0[24+:8]
-                             ,l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8]
-                             ,l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]
-                             };
-              end
 
-            cache_data_mem_pkt_v_o = is_ifill_ret_nc | is_load_ret_nc | is_amo_lrsc_ret | is_amo_op_ret | is_amo_lrsc_ret;
+            cache_data_mem_pkt_v_o = is_ifill_ret_nc | is_amo_lrsc_ret | is_load_ret_nc | is_amo_op_ret;
             cache_req_critical_tag_o = cache_data_mem_pkt_v_o;
             cache_req_critical_data_o = cache_data_mem_pkt_v_o;
 
@@ -482,12 +487,12 @@ module bp_pce
       // Supporting inval all way and single way for both caches. OpenPiton
       // doesn't support inval all way for dcache and inval specific way for
       // icache
-      if (inval_v_li) begin
-        if (((pce_id_p == 0) && l15_pce_ret_li.inval_icache_inval) || ((pce_id_p == 1) && l15_pce_ret_li.inval_dcache_inval)) begin
+      if (inval_v_li | clear_v_li)
+        begin
           cache_tag_mem_pkt_cast_o.index = (pce_id_p == 1)
                                            ? {l15_pce_ret_li.inval_way[1], l15_pce_ret_li.inval_address_15_4[6:0]}
                                            : l15_pce_ret_li.inval_address_15_4[7:1];
-          cache_tag_mem_pkt_cast_o.opcode = e_cache_tag_mem_set_state;
+          cache_tag_mem_pkt_cast_o.opcode = clear_v_li ? e_cache_tag_mem_set_clear : e_cache_tag_mem_set_state;
           cache_tag_mem_pkt_cast_o.way_id = (pce_id_p == 1)
                                             ? l15_pce_ret_li.inval_way[0]
                                             : l15_pce_ret_li.inval_way;
@@ -496,30 +501,15 @@ module bp_pce
 
           l15_pce_ret_yumi_lo = cache_tag_mem_pkt_yumi_i;
         end
-        else if (((pce_id_p == 0) && l15_pce_ret_li.inval_icache_all_way) || ((pce_id_p == 1) && l15_pce_ret_li.inval_dcache_all_way)) begin
-          cache_tag_mem_pkt_cast_o.index = (pce_id_p == 1)
-                                           ? {l15_pce_ret_li.inval_way[1], l15_pce_ret_li.inval_address_15_4[6:0]}
-                                           : l15_pce_ret_li.inval_address_15_4[7:1];
-          cache_tag_mem_pkt_cast_o.opcode = e_cache_tag_mem_set_clear;
-          cache_tag_mem_pkt_cast_o.way_id = (pce_id_p == 1)
-                                            ? l15_pce_ret_li.inval_way[0]
-                                            : l15_pce_ret_li.inval_way;
-          cache_tag_mem_pkt_v_o = l15_pce_ret_v_li;
-          l15_pce_ret_yumi_lo = cache_tag_mem_pkt_yumi_i;
-        end
-      end
-
     end
 
   // synopsys sync_set_reset "reset_i"
   always_ff @(posedge clk_i)
-    begin
-      if(reset_i) begin
-        state_r <= e_reset;
-      end
-      else begin
-        state_r <= state_n;
-      end
+    if(reset_i) begin
+      state_r <= e_reset;
+    end
+    else begin
+      state_r <= state_n;
     end
 
 endmodule
