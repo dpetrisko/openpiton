@@ -269,6 +269,7 @@ module bp_pce
 
   always_comb
     begin
+      fill_data = '0;
       index_up = '0;
 
       cache_tag_mem_pkt_cast_o  = '0;
