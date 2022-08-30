@@ -304,35 +304,21 @@ module bp_piton_top
   //   but bsg_deff_reset is more heavy_weight. It's possible that FPGAs would prefer
   //   the alternate implementation as well. But ASICs will appreciate the time-borrowing
   // Synchronize back to posedge clk
-`ifdef VERILATOR
   bsg_deff_reset
    #(.width_p($bits(bp_pce_l15_req_s)+2))
    posedge_latch
     (.clk_i(posedge_clk)
      ,.reset_i(reset_i)
-`else
-  bsg_dlatch
-   #(.width_p($bits(bp_pce_l15_req_s)+2), .i_know_this_is_a_bad_idea_p(1))
-   posedge_latch
-    (.clk_i(posedge_clk)
-`endif
      ,.data_i({_pce_l15_req_lo[1], _pce_l15_req_v_lo[1], pce_l15_req_ready_and_li[1]})
      ,.data_o({pce_l15_req_lo[1], pce_l15_req_v_lo[1], _pce_l15_req_ready_and_li[1]})
      );
 
   // Synchronize back to negedge clk
-`ifdef VERILATOR
   bsg_deff_reset
-   #(.width_p($bits(bp_l15_pce_ret)+2))
+   #(.width_p($bits(bp_l15_pce_ret_s)+2))
    negedge_latch
     (.clk_i(negedge_clk)
      ,.reset_i(reset_i)
-`else
-  bsg_dlatch
-   #(.width_p($bits(bp_l15_pce_ret_s)+2), .i_know_this_is_a_bad_idea_p(1))
-   negedge_latch
-    (.clk_i(negedge_clk)
-`endif
      ,.data_i({l15_pce_ret_li[1], l15_pce_ret_v_li[1], _l15_pce_ret_ready_and_lo[1]})
      ,.data_o({_l15_pce_ret_li[1], _l15_pce_ret_v_li[1], l15_pce_ret_ready_and_lo[1]})
      );
