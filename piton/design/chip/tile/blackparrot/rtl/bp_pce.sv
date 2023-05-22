@@ -11,6 +11,7 @@ module bp_pce
    , parameter `BSG_INV_PARAM(assoc_p)
    , parameter `BSG_INV_PARAM(fill_width_p)
    , parameter `BSG_INV_PARAM(block_width_p)
+   , parameter `BSG_INV_PARAM(ctag_width_p)
    , parameter `BSG_INV_PARAM(pce_id_p) // 0 = I$, 1 = D$
 
    // Should not need to change from default
@@ -36,7 +37,7 @@ module bp_pce
   // Cache side
   , input [cache_req_width_lp-1:0]                 cache_req_i
   , input                                          cache_req_v_i
-  , output logic                                   cache_req_yumi_o
+  , output logic                                   cache_req_ready_and_o
   , output logic                                   cache_req_busy_o
   , input [cache_req_metadata_width_lp-1:0]        cache_req_metadata_i
   , input                                          cache_req_metadata_v_i
@@ -82,40 +83,47 @@ module bp_pce
   `bp_cast_i(bp_l15_pce_ret_s, l15_pce_ret);
 
   bp_cache_req_s cache_req_lo;
-  logic cache_req_ready_lo;
-  logic cache_req_v_lo, cache_req_yumi_li;
+  logic req_fifo_v_lo, req_fifo_yumi_li;
   bsg_fifo_1r1w_small
    #(.width_p($bits(bp_cache_req_s))
      ,.els_p(req_fifo_els_p)
-     ,.ready_THEN_valid_p(1)
      )
    cache_req_fifo
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
      ,.data_i(cache_req_cast_i)
-     ,.v_i(cache_req_yumi_o)
-     ,.ready_o(cache_req_ready_lo)
+     ,.v_i(cache_req_v_i)
+     ,.ready_o(cache_req_ready_and_o)
 
      ,.data_o(cache_req_lo)
-     ,.v_o(cache_req_v_lo)
-     ,.yumi_i(cache_req_yumi_li)
+     ,.v_o(req_fifo_v_lo)
+     ,.yumi_i(req_fifo_yumi_li)
      );
-  assign cache_req_yumi_li = cache_req_complete_o;
-  // Keep enqueuing as long as we're not going to use the metadata
-  assign cache_req_yumi_o = (cache_req_v_i & cache_req_ready_lo)
-    && (~cache_req_v_lo || cache_req_lo.msg_type inside {e_uc_store, e_wt_store});
+  assign req_fifo_yumi_li = cache_req_complete_o;
 
-  bp_cache_req_metadata_s cache_req_metadata_r;
-  bsg_dff_en_bypass
-   #(.width_p($bits(bp_cache_req_metadata_s)))
-   metadata_reg
+  bp_cache_req_metadata_s cache_req_metadata_lo;
+  logic metadata_fifo_v_lo, metadata_fifo_yumi_li;
+  bsg_fifo_1r1w_small
+   #(.width_p($bits(bp_cache_req_metadata_s))
+     ,.els_p(req_fifo_els_p)
+     ,.ready_THEN_valid_p(1)
+     )
+   cache_metadata_fifo
     (.clk_i(clk_i)
+     ,.reset_i(reset_i)
 
-     ,.en_i(cache_req_metadata_v_i)
-     ,.data_i(cache_req_metadata_i)
-     ,.data_o(cache_req_metadata_r)
+     ,.data_i(cache_req_cast_i)
+     ,.v_i(cache_req_metadata_v_i)
+     ,.ready_o(/* Same size as cache_req fifo */)
+
+     ,.data_o(cache_req_metadata_lo)
+     ,.v_o(metadata_fifo_v_lo)
+     ,.yumi_i(metadata_fifo_yumi_li)
      );
+  assign metadata_fifo_yumi_li = cache_req_complete_o;
+
+  wire cache_req_v_lo = req_fifo_v_lo & metadata_fifo_v_lo;
 
   // Arbitrarily sized for now, enqueue many invalidations?
   bp_l15_pce_ret_s l15_pce_ret_li;
@@ -275,7 +283,6 @@ module bp_pce
       cache_tag_mem_pkt_cast_o  = '0;
       cache_tag_mem_pkt_v_o     = '0;
       cache_data_mem_pkt_cast_o = '0;
-      cache_data_mem_pkt_cast_o.data = fill_data_packed;
       cache_data_mem_pkt_v_o    = '0;
       cache_stat_mem_pkt_cast_o = '0;
       cache_stat_mem_pkt_v_o    = '0;
@@ -285,12 +292,6 @@ module bp_pce
       cache_req_complete_o = '0;
 
       pce_l15_req_cast_o = '0;
-      pce_l15_req_cast_o.data = req_data;
-      pce_l15_req_cast_o.size = req_size;
-      pce_l15_req_cast_o.amo_op = amo_type;
-      pce_l15_req_cast_o.l1rplway = (pce_id_p == 1)
-                                    ? {cache_req_lo.addr[11], cache_req_metadata_r.hit_or_repl_way}
-                                    : cache_req_metadata_r.hit_or_repl_way;
       pce_l15_req_v_o = '0;
 
       l15_pce_ret_yumi_lo = '0;
@@ -320,6 +321,12 @@ module bp_pce
 
         e_ready:
           begin
+                pce_l15_req_cast_o.data     = req_data;
+                pce_l15_req_cast_o.size     = req_size;
+                pce_l15_req_cast_o.amo_op   = amo_type;
+                pce_l15_req_cast_o.l1rplway = (pce_id_p == 1)
+                                              ? {cache_req_lo.addr[11], cache_req_metadata_lo.hit_or_repl_way}
+                                              : cache_req_metadata_lo.hit_or_repl_way;
             if (uc_store_v_r | wt_store_v_r | noret_amo_v_r)
               begin
                 pce_l15_req_cast_o.rqtype  = noret_amo_v_r ? e_amo_req : e_store_req;
@@ -421,6 +428,7 @@ module bp_pce
                                ,l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};
               end
 
+            cache_data_mem_pkt_cast_o.data = fill_data_packed;
             cache_data_mem_pkt_v_o = is_ifill_ret_nc | is_amo_lrsc_ret | is_load_ret_nc | is_amo_op_ret;
             cache_req_critical_tag_o = cache_data_mem_pkt_v_o;
             cache_req_critical_data_o = cache_data_mem_pkt_v_o;
@@ -435,7 +443,7 @@ module bp_pce
           begin
             cache_data_mem_pkt_cast_o.opcode = e_cache_data_mem_write;
             cache_data_mem_pkt_cast_o.index = cache_req_lo.addr[block_offset_width_lp+:index_width_lp];
-            cache_data_mem_pkt_cast_o.way_id = cache_req_metadata_r.hit_or_repl_way;
+            cache_data_mem_pkt_cast_o.way_id = cache_req_metadata_lo.hit_or_repl_way;
             fill_data = is_ifill_ret
                         ? {l15_pce_ret_li.data_3[0+:8],  l15_pce_ret_li.data_3[8+:8]
                            ,l15_pce_ret_li.data_3[16+:8], l15_pce_ret_li.data_3[24+:8]
@@ -462,6 +470,7 @@ module bp_pce
                            ,l15_pce_ret_li.data_0[32+:8], l15_pce_ret_li.data_0[40+:8]
                            ,l15_pce_ret_li.data_0[48+:8], l15_pce_ret_li.data_0[56+:8]};
             cache_data_mem_pkt_cast_o.fill_index = 1'b1;
+            cache_data_mem_pkt_cast_o.data = fill_data_packed;
             // Checking for return types here since we could also have
             // invalidations coming in at anytime
             cache_data_mem_pkt_v_o = is_ifill_ret | is_load_ret;
@@ -469,7 +478,7 @@ module bp_pce
 
             cache_tag_mem_pkt_cast_o.opcode = e_cache_tag_mem_set_tag;
             cache_tag_mem_pkt_cast_o.index = cache_req_lo.addr[block_offset_width_lp+:index_width_lp];
-            cache_tag_mem_pkt_cast_o.way_id = cache_req_metadata_r.hit_or_repl_way;
+            cache_tag_mem_pkt_cast_o.way_id = cache_req_metadata_lo.hit_or_repl_way;
             cache_tag_mem_pkt_cast_o.tag = cache_req_lo.addr[block_offset_width_lp+index_width_lp+:ctag_width_p];
             cache_tag_mem_pkt_cast_o.state = is_ifill_ret ? e_COH_S : e_COH_M;
             cache_tag_mem_pkt_v_o = is_ifill_ret | is_load_ret;

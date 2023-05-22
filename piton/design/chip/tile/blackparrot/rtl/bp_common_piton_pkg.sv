@@ -24,22 +24,21 @@ package bp_common_pkg;
     '{cc_x_dim              : 1
       ,cc_y_dim             : 1
       ,ic_y_dim             : 0
-      ,icache_coherent      : 1
+      ,icache_features      : (1 << e_cfg_enabled) | (1 << e_cfg_coherent)
       ,icache_sets          : 128
       ,icache_assoc         : 4
       ,icache_block_width   : 256
       ,icache_fill_width    : 256
-      ,dcache_writethrough  : 1
-      ,dcache_amo_support   : 0
+      ,dcache_features      : (1 << e_cfg_enabled) | (1 << e_cfg_coherent)
       ,dcache_sets          : 256
       ,dcache_assoc         : 2
       ,dcache_block_width   : 128
       ,dcache_fill_width    : 128
-      ,l2_en                : 0
-      ,l2_amo_support       : (1 << e_lr_sc)
-                              | (1 << e_amo_swap)
-                              | (1 << e_amo_fetch_logic)
-                              | (1 << e_amo_fetch_arithmetic)
+      // Actually L1.5 features
+      ,l2_features          : (1 << e_cfg_lr_sc)
+                              | (1 << e_cfg_amo_swap)
+                              | (1 << e_cfg_amo_fetch_logic)
+                              | (1 << e_cfg_amo_fetch_arithmetic)
       ,default : "inv"
       };
   `bp_aviary_derive_cfg(bp_unicore_parrotpiton_cfg_p

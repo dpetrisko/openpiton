@@ -67,15 +67,15 @@ module bp_piton_top
   `declare_bp_cfg_bus_s(vaddr_width_p, hio_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p);
   `declare_bp_core_if(vaddr_width_p, paddr_width_p, asid_width_p, branch_metadata_fwd_width_p);
 
-  `declare_bp_cache_engine_if(paddr_width_p, ctag_width_p, dcache_sets_p, dcache_assoc_p, dword_width_gp, dcache_block_width_p, dcache_fill_width_p, dcache);
-  `declare_bp_cache_engine_if(paddr_width_p, ctag_width_p, icache_sets_p, icache_assoc_p, dword_width_gp, icache_block_width_p, icache_fill_width_p, icache);
-  `declare_bp_bedrock_mem_if(paddr_width_p, dword_width_gp, lce_id_width_p, lce_assoc_p);
+  `declare_bp_cache_engine_if(paddr_width_p, dcache_ctag_width_p, dcache_sets_p, dcache_assoc_p, dword_width_gp, dcache_block_width_p, dcache_fill_width_p, dcache);
+  `declare_bp_cache_engine_if(paddr_width_p, icache_ctag_width_p, icache_sets_p, icache_assoc_p, dword_width_gp, icache_block_width_p, icache_fill_width_p, icache);
+  `declare_bp_bedrock_mem_if(paddr_width_p, did_width_p, lce_id_width_p, lce_assoc_p);
   `declare_bp_pce_l15_if(paddr_width_p, dword_width_gp);
 
   bp_dcache_req_s dcache_req_lo;
   bp_icache_req_s icache_req_lo;
-  logic dcache_req_v_lo, dcache_req_yumi_li, dcache_req_busy_li, dcache_req_credits_full_li, dcache_req_credits_empty_li;
-  logic icache_req_v_lo, icache_req_yumi_li, icache_req_busy_li, icache_req_credits_full_li, icache_req_credits_empty_li;
+  logic dcache_req_v_lo, dcache_req_ready_and_li, dcache_req_busy_li, dcache_req_credits_full_li, dcache_req_credits_empty_li;
+  logic icache_req_v_lo, icache_req_ready_and_li, icache_req_busy_li, icache_req_credits_full_li, icache_req_credits_empty_li;
 
   bp_dcache_req_metadata_s dcache_req_metadata_lo;
   bp_icache_req_metadata_s icache_req_metadata_lo;
@@ -151,7 +151,7 @@ module bp_piton_top
 
      ,.icache_req_o(icache_req_lo)
      ,.icache_req_v_o(icache_req_v_lo)
-     ,.icache_req_yumi_i(icache_req_yumi_li)
+     ,.icache_req_ready_and_i(icache_req_ready_and_li)
      ,.icache_req_busy_i(icache_req_busy_li)
      ,.icache_req_metadata_o(icache_req_metadata_lo)
      ,.icache_req_metadata_v_o(icache_req_metadata_v_lo)
@@ -178,7 +178,7 @@ module bp_piton_top
 
      ,.dcache_req_o(dcache_req_lo)
      ,.dcache_req_v_o(dcache_req_v_lo)
-     ,.dcache_req_yumi_i(dcache_req_yumi_li)
+     ,.dcache_req_ready_and_i(dcache_req_ready_and_li)
      ,.dcache_req_busy_i(dcache_req_busy_li)
      ,.dcache_req_metadata_o(dcache_req_metadata_lo)
      ,.dcache_req_metadata_v_o(dcache_req_metadata_v_lo)
@@ -216,6 +216,7 @@ module bp_piton_top
     ,.assoc_p(icache_assoc_p)
     ,.fill_width_p(icache_fill_width_p)
     ,.block_width_p(icache_block_width_p)
+    ,.ctag_width_p(icache_ctag_width_p)
     ,.pce_id_p(0)
     )
    icache_pce
@@ -224,7 +225,7 @@ module bp_piton_top
 
     ,.cache_req_i(icache_req_lo)
     ,.cache_req_v_i(icache_req_v_lo)
-    ,.cache_req_yumi_o(icache_req_yumi_li)
+    ,.cache_req_ready_and_o(icache_req_ready_and_li)
     ,.cache_req_busy_o(icache_req_busy_li)
     ,.cache_req_metadata_i(icache_req_metadata_lo)
     ,.cache_req_metadata_v_i(icache_req_metadata_v_lo)
@@ -261,6 +262,7 @@ module bp_piton_top
     ,.assoc_p(dcache_assoc_p)
     ,.fill_width_p(dcache_fill_width_p)
     ,.block_width_p(dcache_block_width_p)
+    ,.ctag_width_p(dcache_ctag_width_p)
     ,.pce_id_p(1)
     )
    dcache_pce
@@ -269,7 +271,7 @@ module bp_piton_top
 
     ,.cache_req_i(dcache_req_lo)
     ,.cache_req_v_i(dcache_req_v_lo)
-    ,.cache_req_yumi_o(dcache_req_yumi_li)
+    ,.cache_req_ready_and_o(dcache_req_ready_and_li)
     ,.cache_req_busy_o(dcache_req_busy_li)
     ,.cache_req_metadata_i(dcache_req_metadata_lo)
     ,.cache_req_metadata_v_i(dcache_req_metadata_v_lo)
@@ -300,25 +302,19 @@ module bp_piton_top
     ,.l15_pce_ret_ready_and_o(_l15_pce_ret_ready_and_lo[1])
     );
 
-  // These latches are optimized out in Verilator 4.220...
-  //   but bsg_deff_reset is more heavy_weight. It's possible that FPGAs would prefer
-  //   the alternate implementation as well. But ASICs will appreciate the time-borrowing
-  // Synchronize back to posedge clk
-  bsg_deff_reset
-   #(.width_p($bits(bp_pce_l15_req_s)+2))
+  bsg_dlatch
+   #(.width_p($bits(bp_pce_l15_req_s)+2), .i_know_this_is_a_bad_idea_p(1))
    posedge_latch
     (.clk_i(posedge_clk)
-     ,.reset_i(reset_i)
      ,.data_i({_pce_l15_req_lo[1], _pce_l15_req_v_lo[1], pce_l15_req_ready_and_li[1]})
      ,.data_o({pce_l15_req_lo[1], pce_l15_req_v_lo[1], _pce_l15_req_ready_and_li[1]})
      );
 
   // Synchronize back to negedge clk
-  bsg_deff_reset
-   #(.width_p($bits(bp_l15_pce_ret_s)+2))
+  bsg_dlatch
+   #(.width_p($bits(bp_l15_pce_ret_s)+2), .i_know_this_is_a_bad_idea_p(1))
    negedge_latch
     (.clk_i(negedge_clk)
-     ,.reset_i(reset_i)
      ,.data_i({l15_pce_ret_li[1], l15_pce_ret_v_li[1], _l15_pce_ret_ready_and_lo[1]})
      ,.data_o({_l15_pce_ret_li[1], _l15_pce_ret_v_li[1], l15_pce_ret_ready_and_lo[1]})
      );
