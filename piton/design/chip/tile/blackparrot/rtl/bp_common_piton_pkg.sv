@@ -24,12 +24,12 @@ package bp_common_pkg;
     '{cc_x_dim              : 16 // Maximum number of BlackParrot cores, increase if more are needed
       ,cc_y_dim             : 1
       ,ic_y_dim             : 0
-      ,icache_features      : (1 << e_cfg_enabled) | (1 << e_cfg_coherent)
+      ,icache_features      : (1 << e_cfg_enabled) | (1 << e_cfg_misaligned) | (1 << e_cfg_coherent)
       ,icache_sets          : 128
       ,icache_assoc         : 4
       ,icache_block_width   : 256
       ,icache_fill_width    : 256
-      ,dcache_features      : (1 << e_cfg_enabled) | (1 << e_cfg_coherent)
+      ,dcache_features      : (1 << e_cfg_enabled) | (1 << e_cfg_coherent) | (1 << e_cfg_hit_under_miss)
       ,dcache_sets          : 256
       ,dcache_assoc         : 2
       ,dcache_block_width   : 128

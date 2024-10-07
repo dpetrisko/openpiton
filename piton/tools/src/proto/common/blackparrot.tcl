@@ -59,20 +59,61 @@ set include_dirs     [concat $include_dirs $vincludes_list]
 
 set file_obj [get_filesets sources_1]
 foreach v $rtl_files {
-  if {[string first bsg_mem_1rw_sync_mask_write_bit_synth $v] != -1} {
+  # Skip configuration package
+  if {[string first bp_common_pkg $v] != -1} {
     continue
+
+  # Skip problematic modules
+  } elseif {[string first bsg_popcount $v] != -1} {
+    continue
+
+  # Remove synth memories
+  } elseif {[string first bsg_mem_1r1w_sync_synth $v] != -1} {
+    continue
+  } elseif {[string first bsg_mem_1rw_sync_synth $v] != -1} {
+    continue
+  } elseif {[string first bsg_mem_1rw_sync_mask_write_bit_synth $v] != -1} {
+    continue
+  } elseif {[string first bsg_mem_1rw_sync_mask_write_byte_synth $v] != -1} {
+    continue
+
+  # Hardened memories
+  } elseif {[string first bsg_mem_1r1w_sync $v] != -1} {
+     set f $BASEJUMP_STL_DIR/hard/ultrascale_plus/bsg_mem/bsg_mem_1r1w_sync.sv
+  } elseif {[string first bsg_mem_1rw_sync $v] != -1} {
+    set f $BASEJUMP_STL_DIR/hard/ultrascale_plus/bsg_mem/bsg_mem_1rw_sync.sv
   } elseif {[string first bsg_mem_1rw_sync_mask_write_bit $v] != -1} {
-    set f $BASEJUMP_STL_DIR/hard/ultrascale_plus/bsg_mem/bsg_mem_1rw_sync_mask_write_bit.v
+    set f $BASEJUMP_STL_DIR/hard/ultrascale_plus/bsg_mem/bsg_mem_1rw_sync_mask_write_bit.sv \
+  } elseif {[string first bsg_mem_1rw_sync_mask_write_byte $v] != -1} {
+    set f $BASEJUMP_STL_DIR/hard/ultrascale_plus/bsg_mem/bsg_mem_1rw_sync_mask_write_byte.sv
+
+  # Other modules
   } elseif {[string first bsg_mul_add_unsigned $v] != -1} {
-    set f $BASEJUMP_STL_DIR/hard/ultrascale_plus/bsg_misc/bsg_mul_add_unsigned.v
-  } elseif {[string first bp_common_pkg $v] != -1} {
-    continue
+    set f $BASEJUMP_STL_DIR/hard/ultrascale_plus/bsg_misc/bsg_mul_add_unsigned.sv
+  } elseif {[string first bsg_launch_sync_sync $v] != -1} {
+    set f $BASEJUMP_STL_DIR/hard/ultrascale_plus/bsg_async/bsg_launch_sync_sync.sv
+  } elseif {[string first bsg_mux $v] != -1} {
+    set f $BASEJUMP_STL_DIR/hard/ultrascale_plus/bsg_misc/bsg_mux.sv
   } else {
     set f $v
   }
 
   lappend BLACKPARROT_RTL_IMPL_FILES $f
 }
+# Adding memories
+lappend BLACKPARROT_RTL_IMPL_FILES $BASEJUMP_STL_DIR/hard/ultrascale_plus/bsg_mem/bsg_mem_1r1w_sync.sv
+lappend BLACKPARROT_RTL_IMPL_FILES $BASEJUMP_STL_DIR/hard/ultrascale_plus/bsg_mem/bsg_mem_1rw_sync.sv
+lappend BLACKPARROT_RTL_IMPL_FILES $BASEJUMP_STL_DIR/hard/ultrascale_plus/bsg_mem/bsg_mem_1rw_sync_mask_write_bit.sv
+lappend BLACKPARROT_RTL_IMPL_FILES $BASEJUMP_STL_DIR/hard/ultrascale_plus/bsg_mem/bsg_mem_1rw_sync_mask_write_byte.sv
+lappend BLACKPARROT_RTL_IMPL_FILES $BASEJUMP_STL_DIR/bsg_mem/bsg_mem_1rw_sync_mask_write_bit_from_1r1w.sv
+
+# Patching
+lappend BLACKPARROT_RTL_IMPL_FILES $BLACKPARROT_ROOT/rtl/bsg_popcount_patched.sv
+
+# Adding missing muxes
+lappend BLACKPARROT_RTL_IMPL_FILES $BASEJUMP_STL_DIR/bsg_misc/bsg_mux_bitwise.sv
+lappend BLACKPARROT_RTL_IMPL_FILES $BASEJUMP_STL_DIR/bsg_misc/bsg_mux_one_hot.sv
+lappend BLACKPARROT_RTL_IMPL_FILES $BASEJUMP_STL_DIR/bsg_misc/bsg_mux_segmented.sv
 add_files -quiet -norecurse -fileset $file_obj $BLACKPARROT_RTL_IMPL_FILES
 
 foreach i $include_dirs {
