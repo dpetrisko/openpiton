@@ -162,7 +162,7 @@ _start:
   sll sp, sp, STKSHIFT
   add sp, sp, tp
 
-ifdef PITON_NOC_IPI
+#ifdef PITON_NOC_IPI
   li t1, 0
   li t2, PITON_NUMTILES
   addi t2, t2, -1
