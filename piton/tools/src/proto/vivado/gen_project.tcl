@@ -83,6 +83,8 @@ foreach inc_file $ALL_INCLUDE_FILES {
         set file_obj [get_files -of_objects $fileset_obj [list "$inc_file"]]
         if {[file extension $inc_file] == ".svh"} {
           set_property "file_type" "SystemVerilog Header" $file_obj
+        } elseif {[info exists ::env(PITON_BLACKPARROT)]} {
+          set_property "file_type" "SystemVerilog Header" $file_obj
         } else {
           set_property "file_type" "Verilog Header" $file_obj
         }
@@ -99,6 +101,8 @@ foreach impl_file $ALL_RTL_IMPL_FILES {
     if {[file exists $impl_file]} {
         set file_obj [get_files -of_objects $fileset_obj [list "$impl_file"]]
         if {[file extension $impl_file] == ".sv"} {
+          set_property "file_type" "SystemVerilog" $file_obj
+        } elseif {[info exists ::env(PITON_BLACKPARROT)]} {
           set_property "file_type" "SystemVerilog" $file_obj
         } else {
           set_property "file_type" "Verilog" $file_obj
