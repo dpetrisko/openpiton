@@ -129,6 +129,7 @@ Step 3. will then download and compile the RISC-V toolchain, the assembly tests 
 
 > You will need Vivado 2018.2 or newer to build an FPGA bitstream with Ariane.
 
+
 #### Running RISC-V Tests and Benchmarks
 
 The RISC-V benchmarks are precompiled in the tool setup step mentioned above. You can run individual benchmarks by first building the simulation model with
