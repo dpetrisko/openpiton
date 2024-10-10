@@ -3064,7 +3064,7 @@ VERILOG COMPILATION RELATED
            in this case, programs are compiled and assembled using the RISCV GCC toolchain.
 
     -blackparrot
-           this specifies that the BLACKPARROT RV64G core shall be used instead of OpenSPARC.
+           this specifies that the BLACKPARROT RV64GC core shall be used
            in this case, programs are compiled and assembled using the RISCV GCC toolchain.
 
 
